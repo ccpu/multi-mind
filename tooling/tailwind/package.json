@@ -16,7 +16,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "tailwindcss": "catalog:prod"
+    "tailwindcss": "catalog:prod",
+    "tw-animate-css": "catalog:dev"
   },
   "devDependencies": {
     "@internal/eslint-config": "workspace:*",

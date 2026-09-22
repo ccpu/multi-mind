@@ -1,9 +1,6 @@
-# Builds the installers on every platform.
-#
-# Called by release.yml, and runnable on its own to check that a change still
-# packages everywhere. With `tag-name` set it creates or updates a draft GitHub
-# release and attaches the installers; without it the installers are uploaded
-# as workflow artifacts and nothing is published.
+# Builds installers on every supported desktop platform. Release publishing is
+# intentionally separate: deploy.yml attaches these artifacts once semantic-release
+# has created the tag and GitHub release.
 
 name: Build
 
@@ -11,22 +8,11 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
-      tag-name:
-        description: >-
-          Tag of the release to attach the installers to, e.g. `v1.2.0`.
-          Leave empty to only upload workflow artifacts.
+      app-version:
+        description: Version to stamp into the Tauri manifests before packaging.
         required: false
         type: string
         default: ''
-      release-draft:
-        description: Keep the release a draft so it can be reviewed before it goes out.
-        required: false
-        type: boolean
-        default: true
-
-# No `permissions` block: a reusable workflow cannot ask for more than its
-# caller granted, so the scopes are the caller's to set. `contents: write` is
-# needed only when `tag-name` is passed.
 
 defaults:
   run:
@@ -41,18 +27,22 @@ jobs:
         include:
           - platform: macos-latest
             label: macOS (Apple silicon)
+            artifact-name: tauri-macos-aarch64
             args: --target aarch64-apple-darwin
             rust-targets: aarch64-apple-darwin
           - platform: macos-latest
             label: macOS (Intel)
+            artifact-name: tauri-macos-x86_64
             args: --target x86_64-apple-darwin
             rust-targets: x86_64-apple-darwin
           - platform: ubuntu-latest
             label: Linux
+            artifact-name: tauri-linux-x86_64
             args: ''
             rust-targets: ''
           - platform: windows-latest
             label: Windows
+            artifact-name: tauri-windows-x86_64
             args: ''
             rust-targets: ''
 
@@ -82,21 +72,27 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./apps/desktop/src-tauri -> target
-          # A failed build still leaves most dependencies compiled.
           cache-on-failure: true
 
-      # tauri-action runs the frontend build through `beforeBuildCommand`, then
-      # `tauri build`, then uploads whatever the bundler produced.
-      - name: Build the app
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The release commit is created in an earlier job, so this checkout still
+      # needs its version stamped before Tauri names the installers.
+      - name: Stamp the app version
+        if: inputs.app-version != ''
+        run: node scripts/stamp-tauri-version.mjs "${{ inputs.app-version }}"
+
+      - name: Build installers
+        run: pnpm --filter @app/desktop exec tauri build ${{ matrix.args }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
         with:
-          projectPath: apps/desktop
-          tagName: ${{ inputs.tag-name }}
-          releaseName: ${{ inputs.tag-name }}
-          releaseDraft: ${{ inputs.release-draft }}
-          prerelease: false
-          generateReleaseNotes: ${{ inputs.tag-name != '' }}
-          uploadWorkflowArtifacts: true
-          args: ${{ matrix.args }}
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.AppImage*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.app.tar.gz*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.deb*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.dmg*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.exe*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.msi*
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.rpm*

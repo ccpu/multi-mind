@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-guest-config"
+description = "Enables the get_guest_config command without any pre-configured scope."
+commands.allow = ["get_guest_config"]
+
+[[permission]]
+identifier = "deny-get-guest-config"
+description = "Denies the get_guest_config command without any pre-configured scope."
+commands.deny = ["get_guest_config"]

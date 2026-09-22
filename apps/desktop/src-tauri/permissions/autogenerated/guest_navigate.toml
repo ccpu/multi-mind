@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-guest-navigate"
+description = "Enables the guest_navigate command without any pre-configured scope."
+commands.allow = ["guest_navigate"]
+
+[[permission]]
+identifier = "deny-guest-navigate"
+description = "Denies the guest_navigate command without any pre-configured scope."
+commands.deny = ["guest_navigate"]

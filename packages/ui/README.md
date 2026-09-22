@@ -1,35 +1,28 @@
 # @internal/ui
 
-The shared React components and the theme, styled with the Tailwind tokens from
-`@internal/tailwind`.
+One import surface for both windows.
+
+Almost everything here is a re-export of [`@pixpilot/shadcn-ui`](https://www.npmjs.com/package/@pixpilot/shadcn-ui),
+which is the app's design system. Import from `@internal/ui` rather than from it
+directly, so a change of design system is one file rather than every component.
+
+Reach for `@pixpilot/shadcn` when you need a raw shadcn primitive the wrapper
+does not re-export — `DropdownMenu`, `Textarea`, `Checkbox`, `Switch`, `Label`,
+and `cn`.
+
+## The mark
+
+`Logo` is the one component this package owns: three thought bubbles turned
+towards a single spark, which is the whole premise of the app. It is drawn in
+`currentColor` so it follows the theme, and sized like a Lucide icon so it sits
+next to one without looking out of place.
 
 ```tsx
-import { Button, Card, ThemeProvider, ThemeToggle, useTheme } from '@internal/ui';
+import { Logo } from '@internal/ui';
+
+<Logo className="size-5 text-muted-foreground" />;        // decoration
+<Logo title="Multi Mind" />;                               // an image with a name
 ```
 
-## Theme
-
-`ThemeProvider` stores the choice (`light` / `dark` / `system`) in
-`localStorage`, follows the OS when `system` is selected, and toggles the `dark`
-class on `<html>`. Components do not need `dark:` variants: the colors are CSS
-custom properties that the `.dark` block redefines, so `bg-card` is the right
-color in both themes.
-
-`useTheme()` returns `{ theme, resolvedTheme, setTheme }` and throws when used
-outside the provider.
-
-## Components
-
-Components take a `className` that is merged with `cn()`, so a caller can
-override a utility without fighting specificity.
-
-| Component     | Notes                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------------- |
-| `Button`      | `variant`: primary / secondary / outline / ghost, `size`: sm / md / lg. Defaults to `type="button"`. |
-| `Card`        | Optional `title` and `description` header.                                                           |
-| `TextInput`   | Labelled input; the label is wired to the input with `useId`.                                        |
-| `ThemeToggle` | Segmented light / dark / system control.                                                             |
-
-This is deliberately a small set — enough to build the template's window. Add a
-component here as soon as a second window would need it, and keep anything
-app-specific in `apps/desktop/src/components`.
+The same drawing is the app icon in `apps/desktop/src-tauri/icons`, and the
+favicon each window serves from `public/logo.svg`.

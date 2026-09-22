@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Tauri Template",
+  "productName": "Multi Mind",
   "version": "0.1.0",
-  "identifier": "com.example.tauri-template",
+  "identifier": "com.ccpu.multi-mind",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
@@ -13,14 +13,16 @@
     "windows": [
       {
         "label": "main",
-        "title": "Tauri Template",
-        "width": 1000,
-        "height": 720,
-        "minWidth": 680,
-        "minHeight": 480,
+        "title": "Multi Mind",
+        "url": "index.html",
+        "width": 800,
+        "height": 450,
+        "minWidth": 640,
+        "minHeight": 360,
         "center": true,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "backgroundColor": "#000000"
       }
     ],
     "security": {
@@ -31,9 +33,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "category": "DeveloperTool",
-    "shortDescription": "Tauri monorepo template",
-    "longDescription": "A Tauri v2 desktop application template built with pnpm workspaces, Turborepo, Vite, React, TypeScript and Tailwind CSS.",
+    "category": "Productivity",
+    "shortDescription": "One prompt, many AI chat sites side by side",
+    "longDescription": "Multi Mind opens AI chat websites in resizable panes, sends your prompt to every active site at once, and lets you compare their answers in one window. It uses the sites' own interfaces and your signed-in sessions, so no API keys are needed.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,5 +44,12 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/ccpu/multi-mind/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
+  }
 }

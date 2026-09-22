@@ -1,12 +1,13 @@
-//! Commands the frontend may call through `invoke`.
+//! The commands that are about the app itself rather than about a browser or
+//! the settings file.
 //!
-//! Each one is registered in `generate_handler!` in `lib.rs` and wrapped, with
-//! its return type, in the `@internal/tauri-api` package. Keep the two in sync:
-//! the bridge is a string-keyed call, so nothing else will catch a rename.
+//! Each one is registered in `generate_handler!` in `lib.rs`, named in
+//! `build.rs` so the ACL knows it, granted in `capabilities/default.json`, and
+//! wrapped with its return type in `@internal/tauri-api`. Keep the four in
+//! step: a bridge call is a string, and nothing else will catch a rename.
 
 use serde::Serialize;
-// `package_info` comes from the Manager trait, which has to be in scope.
-use tauri::Manager;
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Returned by [`app_info`]. Serialised as camelCase to match the TypeScript
 /// interface in `packages/tauri-api/src/types.ts`.
@@ -20,21 +21,17 @@ pub struct AppInfo {
     pub arch: String,
 }
 
-/// Build a greeting for `name`.
-#[tauri::command]
-pub fn greet(name: &str) -> String {
-    let name = name.trim();
-
-    if name.is_empty() {
-        "Hello there! This greeting came from Rust.".to_string()
-    } else {
-        format!("Hello, {name}! This greeting came from Rust.")
-    }
+/// What [`open_window`] answers, kept as the Electron port shaped it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenWindowResult {
+    pub success: bool,
+    pub message: String,
 }
 
 /// Report what the app is and where it is running.
 #[tauri::command]
-pub fn app_info(app: tauri::AppHandle) -> AppInfo {
+pub fn app_info(app: AppHandle) -> AppInfo {
     let package_info = app.package_info();
 
     AppInfo {
@@ -46,35 +43,98 @@ pub fn app_info(app: tauri::AppHandle) -> AppInfo {
     }
 }
 
+/// The windows the app knows how to open, and the page each one is.
+fn page_of(window_name: &str) -> Option<(&'static str, &'static str, f64, f64)> {
+    match window_name {
+        "settings" => Some(("settings.html", "Multi Mind Settings", 900.0, 760.0)),
+        _ => None,
+    }
+}
+
+/// Raises a window by name, opening it if it is not up yet.
+///
+/// `open`, not `create`: asking for a window that is already up should raise
+/// and focus it rather than open a second copy — which is what the Electron
+/// port's `openWindow` did, and what the **Settings** button expects when it is
+/// pressed twice.
+///
+/// The settings window is built on demand rather than declared in
+/// `tauri.conf.json`, so an app that is never configured never pays for a
+/// second webview.
+#[tauri::command]
+pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResult {
+    if let Some(window) = app.get_webview_window(&window_name) {
+        let raised = window
+            .show()
+            .and_then(|()| window.unminimize())
+            .and_then(|()| window.set_focus());
+
+        return match raised {
+            Ok(()) => OpenWindowResult {
+                success: true,
+                message: format!("Window \"{window_name}\" raised."),
+            },
+            Err(error) => OpenWindowResult {
+                success: false,
+                message: format!("Failed to raise window \"{window_name}\": {error}"),
+            },
+        };
+    }
+
+    let Some((page, title, width, height)) = page_of(&window_name) else {
+        return OpenWindowResult {
+            success: false,
+            message: format!("There is no \"{window_name}\" window to open."),
+        };
+    };
+
+    let built = WebviewWindowBuilder::new(&app, &window_name, WebviewUrl::App(page.into()))
+        .title(title)
+        .inner_size(width, height)
+        .min_inner_size(560.0, 420.0)
+        .center()
+        .build();
+
+    match built {
+        Ok(_) => OpenWindowResult {
+            success: true,
+            message: format!("Window \"{window_name}\" opened successfully."),
+        },
+        Err(error) => OpenWindowResult {
+            success: false,
+            message: format!("Failed to open window \"{window_name}\": {error}"),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn greets_by_name() {
-        assert_eq!(greet("Ada"), "Hello, Ada! This greeting came from Rust.");
+    fn knows_the_settings_window() {
+        assert!(page_of("settings").is_some());
     }
 
+    /*
+     * A window name arrives from the frontend as a string, and the only names
+     * that may become a window are the ones named here — otherwise a typo, or
+     * anything worse, would open a page of its own choosing.
+     */
     #[test]
-    fn trims_the_name() {
-        assert_eq!(
-            greet("  Ada  "),
-            "Hello, Ada! This greeting came from Rust."
-        );
-    }
-
-    #[test]
-    fn falls_back_when_the_name_is_blank() {
-        assert_eq!(greet("   "), "Hello there! This greeting came from Rust.");
+    fn refuses_a_name_it_does_not_know() {
+        assert!(page_of("main").is_none());
+        assert!(page_of("../../etc/passwd").is_none());
+        assert!(page_of("").is_none());
     }
 
     #[test]
     fn app_info_serialises_as_camel_case() {
         let info = AppInfo {
-            name: "Tauri Template".to_string(),
+            name: "Multi Mind".to_string(),
             version: "0.1.0".to_string(),
             tauri_version: "2.0.0".to_string(),
-            platform: "linux".to_string(),
+            platform: "windows".to_string(),
             arch: "x86_64".to_string(),
         };
 

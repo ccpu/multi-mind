@@ -1,0 +1,38 @@
+import type { SVGProps } from 'react';
+
+/**
+ * The Multi Mind mark: three thought bubbles turned towards one spark in the
+ * middle — the app's whole premise, one prompt answered by several minds.
+ *
+ * The same drawing is the app icon (`buildResources/icon.svg`, which
+ * `scripts/generate-icons.mjs` turns into the packaged `.png`/`.ico`/`.icns`)
+ * and the favicon each window's `public/logo.svg` serves. Here it is painted in
+ * `currentColor` so it follows the theme, and sized like a Lucide icon so it
+ * can sit next to one without looking out of place.
+ */
+const MARK =
+  'M125.57 32.13C139.92 30.02 156.11 36.31 164.73 48.09C174.14 60.96 175.21 81.82 159.74 90.89C158.28 91.75 156.27 93.04 154.5 92.78C151.99 92.41 149.32 88.92 147.47 87.35C144.48 84.82 139.68 82.89 135.83 82.32C128.72 81.25 121.97 82.81 115.8 86.3C111.5 88.73 109.02 94.7 103.46 91.72C87.66 83.23 86.63 62.63 96.23 49.07C103.15 39.29 113.97 33.84 125.57 32.13ZM129.92 92.42C135.25 90.38 134.39 105.35 131.44 105.88C126.42 106.79 126.62 93.68 129.92 92.42ZM116.47 101.48C118.87 101.69 128.78 107.28 124.79 110.29C122.85 111.76 115.08 107.37 114.1 105.42C113.19 103.59 114.22 101.29 116.47 101.48ZM144.53 101.74C146.56 101.25 148.78 102.7 147.81 104.98C146.66 107.68 139.06 112.36 136.67 109.83C133.81 106.79 142.11 102.32 144.53 101.74ZM82.21 102.15C86.86 101.93 97.97 103.36 100.77 107.75C102.13 109.87 101.38 113.11 101.7 115.5C102.27 119.86 104.05 123.87 106.22 127.62C108.76 132.01 113.26 135.49 117.58 137.91C120.51 139.55 124.58 139.76 125.59 143.55C129.36 157.67 119.49 172.55 105.81 175.95C101.83 176.94 97.27 175.41 93.57 176.44C88.82 177.76 80.13 183.91 75.51 183.35C70.14 182.71 78.37 170.97 76.61 168.56C75.53 167.09 73.43 165.97 72.05 164.77C68.59 161.74 65.4 157.62 63.28 153.54C53.34 134.39 54.66 103.42 82.21 102.15ZM175.88 102.15C203.48 100.61 209.5 130.13 199.88 150.73C197.42 155.99 193.72 160.71 189.62 164.79C188.28 166.13 186.16 167.08 185.04 168.56C182.95 171.34 191.79 182.34 186.33 183.49C182.84 184.22 171.98 177.14 167.82 176.35C164 175.61 159.9 176.96 155.88 175.92C142.15 172.35 132.7 158.2 136.13 143.93C137.11 139.88 140.14 140.11 143.25 138.41C147.94 135.83 152.64 132.33 155.54 127.71C157.51 124.55 159.31 120.36 159.83 116.68C160.22 114.03 159.42 109.52 161.14 107.3C163.87 103.78 171.8 102.38 175.88 102.15ZM122.9 114.82C124.82 114.63 126.85 116.48 125.67 118.47C124.33 120.73 116.87 126.13 114.52 123.65C111.5 120.46 120.2 115.07 122.9 114.82ZM137.52 115.03C140.11 114.21 150.02 120.18 147.53 123.37C144.62 127.11 131.67 116.9 137.52 115.03Z';
+
+export interface LogoProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
+  /** Accessible name. Leave it off for a logo that only decorates. */
+  title?: string;
+}
+
+export function Logo({ title, ...props }: LogoProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="42.89 19.64 176 176"
+      width="1em"
+      height="1em"
+      fill="currentColor"
+      focusable="false"
+      role={title === undefined ? 'presentation' : 'img'}
+      aria-hidden={title === undefined ? true : undefined}
+      {...props}
+    >
+      {title === undefined ? null : <title>{title}</title>}
+      <path fillRule="evenodd" d={MARK} />
+    </svg>
+  );
+}

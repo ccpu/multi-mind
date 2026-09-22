@@ -1,7 +1,8 @@
 [package]
-name = "desktop"
+name = "multi-mind"
 version = "0.1.0"
-description = "Tauri desktop application"
+description = "One prompt, many AI chat sites side by side"
+authors = ["Mo Doaie <m.doaie@hotmail.com>"]
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -11,17 +12,38 @@ publish = false
 [lib]
 # The desktop binary and the mobile entry point both call into this library,
 # so the app lives in lib.rs and main.rs stays a two-line shim.
-name = "desktop_lib"
+name = "multi_mind_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `unstable` is what gives a window more than one webview. Multi Mind is a row
+# of embedded chat sites next to the app's own prompt box, so it needs exactly
+# that — see src/guest.rs.
+#
+# `devtools` is on for release builds too, not just debug ones: the embedded
+# sites break in ways only their own DevTools explain, and a packaged app is
+# where that happens. `Inspect Element` is in the right-click menu for it.
+tauri = { version = "2", features = ["unstable", "devtools"] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rand = "0.8"
+url = "2"
+
+# Updating and staying in one process are desktop-only concerns; on mobile
+# there is no second launch to hand over and no installer to replace. Spelt out
+# as the platforms rather than as `cfg(desktop)`, because that one is set by
+# tauri-build at compile time and Cargo resolves dependencies long before.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 
 # Smaller binaries, as recommended by the Tauri app-size guide. Drop `panic`
 # and `strip` if you would rather have readable backtraces from a release build.

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-guest-url"
+description = "Enables the guest_url command without any pre-configured scope."
+commands.allow = ["guest_url"]
+
+[[permission]]
+identifier = "deny-guest-url"
+description = "Denies the guest_url command without any pre-configured scope."
+commands.deny = ["guest_url"]

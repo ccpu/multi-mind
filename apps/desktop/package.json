@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "The Tauri desktop application: React frontend in src/, Rust backend in src-tauri/",
+  "description": "Multi Mind: the main window, the settings window, and the Rust backend in src-tauri/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -27,15 +27,29 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
+    "@dnd-kit/core": "catalog:prod",
+    "@dnd-kit/modifiers": "catalog:prod",
+    "@dnd-kit/sortable": "catalog:prod",
+    "@dnd-kit/utilities": "catalog:prod",
+    "@internal/configs": "workspace:*",
+    "@internal/multi-mind": "workspace:*",
     "@internal/tailwind": "workspace:*",
     "@internal/tauri-api": "workspace:*",
     "@internal/ui": "workspace:*",
     "@internal/utils": "workspace:*",
+    "@pixpilot/shadcn": "catalog:prod",
+    "@pixpilot/shadcn-ui": "catalog:prod",
     "@tauri-apps/api": "catalog:prod",
+    "@tauri-apps/plugin-clipboard-manager": "catalog:prod",
+    "@tauri-apps/plugin-dialog": "catalog:prod",
     "@tauri-apps/plugin-opener": "catalog:prod",
+    "easymde": "catalog:prod",
+    "lucide-react": "catalog:prod",
     "react": "catalog:prod",
     "react-dom": "catalog:prod",
-    "react-icons": "catalog:prod"
+    "react-icons": "catalog:prod",
+    "split.js": "catalog:prod",
+    "tailwindcss": "catalog:prod"
   },
   "devDependencies": {
     "@internal/eslint-config": "workspace:*",

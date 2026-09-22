@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-guest-sync"
+description = "Enables the guest_sync command without any pre-configured scope."
+commands.allow = ["guest_sync"]
+
+[[permission]]
+identifier = "deny-guest-sync"
+description = "Denies the guest_sync command without any pre-configured scope."
+commands.deny = ["guest_sync"]

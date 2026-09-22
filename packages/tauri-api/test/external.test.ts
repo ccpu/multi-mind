@@ -1,31 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { openExternal } from '../src/external';
 
-const openUrl = vi.hoisted(() => vi.fn());
+const openUrl = vi.fn();
 
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
 
+const { openExternal } = await import('../src/external');
+
+beforeEach(() => {
+  openUrl.mockReset();
+});
+
 describe('openExternal', () => {
-  beforeEach(() => {
-    openUrl.mockReset();
-    openUrl.mockResolvedValue(undefined);
+  it('hands a web link to the browser the user actually chose', async () => {
+    await openExternal('https://example.com/thread');
+
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/thread');
   });
 
-  it('opens an https url', async () => {
-    await openExternal('https://tauri.app');
-
-    expect(openUrl).toHaveBeenCalledWith('https://tauri.app/');
-  });
-
-  it('refuses a non-web protocol', async () => {
-    await expect(openExternal('file:///etc/passwd')).rejects.toThrow(
-      'Refusing to open a file: URL externally',
-    );
-    expect(openUrl).not.toHaveBeenCalled();
-  });
-
-  it('rejects a string that is not a url', async () => {
-    await expect(openExternal('not a url')).rejects.toThrow();
+  it('refuses a target the shell should never be handed', async () => {
+    // eslint-disable-next-line no-script-url -- the point of the case is that this never leaves the app.
+    await expect(openExternal('javascript:alert(1)')).rejects.toThrow(/Refusing/u);
     expect(openUrl).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reset-settings-location"
+description = "Enables the reset_settings_location command without any pre-configured scope."
+commands.allow = ["reset_settings_location"]
+
+[[permission]]
+identifier = "deny-reset-settings-location"
+description = "Denies the reset_settings_location command without any pre-configured scope."
+commands.deny = ["reset_settings_location"]

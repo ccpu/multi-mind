@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 /*
  * Tailwind only scans the files it is told about. The app's own sources are
@@ -6,6 +7,12 @@
  * live outside that tree, so they are registered explicitly.
  */
 @source '../../packages/*/src/**/*.{ts,tsx}';
+@source '../../apps/desktop/src/**/*.{ts,tsx}';
+
+/* `@pixpilot/shadcn*` ship compiled JS, so their utility classes are only found
+   when Tailwind is pointed at the installed package. */
+@source '../../packages/ui/node_modules/@pixpilot/shadcn/dist';
+@source '../../packages/ui/node_modules/@pixpilot/shadcn-ui/dist';
 
 /* Class-based dark mode: the ThemeProvider toggles `.dark` on <html>. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -17,6 +24,8 @@
   --color-muted-foreground: #737373;
   --color-card: #ffffff;
   --color-card-foreground: #171717;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #171717;
   --color-border: #e5e5e5;
   --color-input: #e5e5e5;
   --color-primary: #171717;
@@ -28,6 +37,9 @@
   --color-destructive: #ef4444;
   --color-destructive-foreground: #fafafa;
   --color-ring: #171717;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius: 0.5rem;
 }
 
 .dark {
@@ -37,6 +49,8 @@
   --color-muted-foreground: #a3a3a3;
   --color-card: #171717;
   --color-card-foreground: #ededed;
+  --color-popover: #171717;
+  --color-popover-foreground: #ededed;
   --color-border: #262626;
   --color-input: #262626;
   --color-primary: #ededed;
@@ -47,7 +61,7 @@
   --color-accent-foreground: #ededed;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #fafafa;
-  --color-ring: #d4d4d4;
+  --color-ring: #212121;
 }
 
 :root {
@@ -58,9 +72,11 @@
   color-scheme: dark;
 }
 
+/* shadcn/ui assumes these defaults are applied to every element. */
 @layer base {
   * {
     border-color: var(--color-border);
+    outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
   }
 
   html,

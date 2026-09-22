@@ -18,9 +18,17 @@ on:
       - master
       - next
   workflow_call:
+    inputs:
+      concurrency_group:
+        description: Unique group for a caller that already holds its own concurrency lock.
+        required: false
+        type: string
+        default: ''
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Reusable workflows inherit the caller's `github.workflow`. A caller can
+  # provide a distinct group to prevent the CI job waiting on its own parent.
+  group: ${{ inputs.concurrency_group || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: true
 
 permissions:

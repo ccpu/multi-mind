@@ -1,0 +1,71 @@
+/*
+ * EasyMDE ships a light-only stylesheet sized for a page, not for a panel that
+ * is a tenth of a window. These overrides do two things: make the editor fill
+ * whatever height the prompt panel has, and take its colours from the app's
+ * theme tokens so it follows dark mode along with everything else.
+ */
+
+.multi-mind-markdown-prompt,
+.multi-mind-markdown-prompt .EasyMDEContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.multi-mind-markdown-prompt .EasyMDEContainer .CodeMirror {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius);
+  background-color: transparent;
+  color: var(--color-foreground);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.multi-mind-markdown-prompt .EasyMDEContainer .CodeMirror-focused {
+  border-color: var(--color-ring);
+  outline: 3px solid color-mix(in oklab, var(--color-ring) 50%, transparent);
+  outline-offset: -1px;
+}
+
+.multi-mind-markdown-prompt .CodeMirror-scroll {
+  min-height: 0;
+}
+
+.multi-mind-markdown-prompt .CodeMirror-placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.multi-mind-markdown-prompt .CodeMirror-cursor {
+  border-left-color: var(--color-foreground);
+}
+
+.multi-mind-markdown-prompt .CodeMirror-selected,
+.multi-mind-markdown-prompt .CodeMirror-selectedtext {
+  background-color: color-mix(in oklab, var(--color-primary) 25%, transparent);
+}
+
+/* The markdown tokens EasyMDE highlights, rebuilt on the theme tokens. */
+.multi-mind-markdown-prompt .cm-s-easymde .cm-header {
+  color: var(--color-foreground);
+}
+
+.multi-mind-markdown-prompt .cm-s-easymde .cm-quote,
+.multi-mind-markdown-prompt .cm-s-easymde .cm-comment {
+  color: var(--color-muted-foreground);
+}
+
+.multi-mind-markdown-prompt .cm-s-easymde .cm-link,
+.multi-mind-markdown-prompt .cm-s-easymde .cm-url {
+  color: color-mix(in oklab, var(--color-primary) 70%, var(--color-muted-foreground));
+}
+
+.multi-mind-markdown-prompt .cm-s-easymde .cm-comment {
+  background-color: var(--color-muted);
+  border-radius: 0.25rem;
+}

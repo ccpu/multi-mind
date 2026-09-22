@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-guest-open-devtools"
+description = "Enables the guest_open_devtools command without any pre-configured scope."
+commands.allow = ["guest_open_devtools"]
+
+[[permission]]
+identifier = "deny-guest-open-devtools"
+description = "Denies the guest_open_devtools command without any pre-configured scope."
+commands.deny = ["guest_open_devtools"]

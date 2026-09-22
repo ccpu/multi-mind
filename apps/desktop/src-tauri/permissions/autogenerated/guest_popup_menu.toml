@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-guest-popup-menu"
+description = "Enables the guest_popup_menu command without any pre-configured scope."
+commands.allow = ["guest_popup_menu"]
+
+[[permission]]
+identifier = "deny-guest-popup-menu"
+description = "Denies the guest_popup_menu command without any pre-configured scope."
+commands.deny = ["guest_popup_menu"]

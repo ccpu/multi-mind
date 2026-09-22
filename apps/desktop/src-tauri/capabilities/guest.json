@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "guest",
+  "description": "What an embedded AI chat site may do. It is somebody else's page running inside our window, so it gets one command and no plugins: `guest_message`, which is how it says it was clicked, right-clicked, or asked to open a window. Everything the app does about that is decided by the main window, not here.",
+  "webviews": ["chat-*"],
+  "local": false,
+  "remote": {
+    "urls": ["http://*", "http://*/*", "https://*", "https://*/*"]
+  },
+  "permissions": ["allow-guest-message"]
+}

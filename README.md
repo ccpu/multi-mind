@@ -115,19 +115,26 @@ light / dark / system choice.
 | ----------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
 | [ci.yml](.github/workflows/ci.yml)                     | push, pull request            | Lint, format, types and tests, plus rustfmt, clippy and `cargo test` |
 | [build.yml](.github/workflows/build.yml)               | manual, or called by a release | Builds installers on macOS (both architectures), Windows and Linux |
-| [release.yml](.github/workflows/release.yml)           | a `v*` tag                     | Runs CI, then attaches the installers to a draft GitHub release |
+| [release.yml](.github/workflows/release.yml)           | push to `main`                 | Uses conventional commits to version, tag and publish a GitHub release |
 | [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | push, PR, weekly         | CodeQL scan of the TypeScript sources                    |
 
-To cut a release, bump the version in `apps/desktop/package.json`,
-`src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` — the last one names the
-installers — then:
+Use [Conventional Commits](https://www.conventionalcommits.org/) on `main`.
+Pushing a `fix:` commit creates a patch release; `feat:` creates a minor
+release; and a breaking-change footer creates a major release. The Release
+workflow updates `package.json`, `apps/desktop/package.json`,
+`apps/desktop/src-tauri/Cargo.toml` and
+`apps/desktop/src-tauri/tauri.conf.json`, then tags the version, creates a
+GitHub release, builds the installers and attaches them.
+
+For example:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git commit -m "feat: add a new AI provider"
+git push origin main
 ```
 
-Review the draft release and publish it. Nothing is signed or notarised out of
+The release is published automatically once its installers finish building.
+Nothing is signed or notarised out of
 the box: see the Tauri guides for
 [code signing](https://v2.tauri.app/distribute/sign/) and the
 [updater](https://v2.tauri.app/plugin/updater/), both of which come down to

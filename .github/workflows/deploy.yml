@@ -1,0 +1,52 @@
+# Attaches the build artifacts to the GitHub release semantic-release created.
+
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      tag-name:
+        description: Existing release tag to receive the installers.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tauri-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Attach installers to the release
+        run: |
+          mapfile -d '' files < <(
+            find release-artifacts -type f \( \
+              -name '*.AppImage' -o -name '*.AppImage.sig' -o \
+              -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' -o \
+              -name '*.deb' -o -name '*.deb.sig' -o \
+              -name '*.dmg' -o -name '*.dmg.sig' -o \
+              -name '*.exe' -o -name '*.exe.sig' -o \
+              -name '*.msi' -o -name '*.msi.sig' -o \
+              -name '*.rpm' -o -name '*.rpm.sig' \
+            \) -print0
+          )
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo '::error::No Tauri installers were downloaded.'
+            exit 1
+          fi
+
+          gh release upload "${{ inputs.tag-name }}" "${files[@]}" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

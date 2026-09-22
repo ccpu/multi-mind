@@ -3,6 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "description": "Typed wrappers around the Rust commands and events — the only place `invoke` is called",
   "exports": "./src/index.ts",
   "scripts": {
     "clean:all": "git clean -xdf .cache .turbo dist node_modules",
@@ -17,8 +18,10 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
+    "@internal/multi-mind": "workspace:*",
     "@internal/utils": "workspace:*",
     "@tauri-apps/api": "catalog:prod",
+    "@tauri-apps/plugin-dialog": "catalog:prod",
     "@tauri-apps/plugin-opener": "catalog:prod"
   },
   "devDependencies": {

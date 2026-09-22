@@ -1,57 +1,89 @@
+import type { AppSettings } from '@internal/multi-mind';
+import { DEFAULT_SETTINGS } from '@internal/multi-mind';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { commands, safeCommands } from '../src/commands';
 
-const invoke = vi.hoisted(() => vi.fn());
+const invoke = vi.fn();
+const openDialog = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: openDialog }));
 
-describe('commands', () => {
-  beforeEach(() => {
-    invoke.mockReset();
-  });
+const {
+  browseSettingsLocation,
+  resetSettingsLocation,
+  saveSettings,
+  setSettingsLocation,
+} = await import('../src/commands');
 
-  it('passes the argument under the name the Rust command expects', async () => {
-    invoke.mockResolvedValue('Hello, Ada!');
+beforeEach(() => {
+  invoke.mockReset();
+  openDialog.mockReset();
+});
 
-    await expect(commands.greet('Ada')).resolves.toBe('Hello, Ada!');
-    expect(invoke).toHaveBeenCalledWith('greet', { name: 'Ada' });
-  });
+describe('saveSettings', () => {
+  it('sends the patch under the name the Rust command takes', async () => {
+    const patch: Partial<AppSettings> = { autoShrink: false };
+    invoke.mockResolvedValue(DEFAULT_SETTINGS);
 
-  it('invokes app_info without arguments', async () => {
-    invoke.mockResolvedValue({ name: 'app', version: '0.1.0' });
+    await saveSettings(patch);
 
-    await commands.appInfo();
-
-    expect(invoke).toHaveBeenCalledWith('app_info');
-  });
-
-  it('propagates a rejection', async () => {
-    invoke.mockRejectedValue(new Error('command not found'));
-
-    await expect(commands.greet('Ada')).rejects.toThrow('command not found');
+    expect(invoke).toHaveBeenCalledWith('save_settings', { patch });
   });
 });
 
-describe('safeCommands', () => {
-  beforeEach(() => {
-    invoke.mockReset();
-  });
+describe('setSettingsLocation', () => {
+  /*
+   * A folder that is missing or already occupied comes back as a status the
+   * window asks about, and the same call is then made again with the answer.
+   * An omitted request has to reach Rust as an empty object rather than
+   * `undefined`, or the second call cannot be told from the first.
+   */
+  it('always sends a request object, answered or not', async () => {
+    invoke.mockResolvedValue({ status: 'ok', directory: 'D:\\Multi Mind' });
 
-  it('returns a value result on success', async () => {
-    invoke.mockResolvedValue('Hello, Ada!');
+    await setSettingsLocation('D:\\Multi Mind');
 
-    await expect(safeCommands.greet('Ada')).resolves.toStrictEqual({
-      ok: true,
-      value: 'Hello, Ada!',
+    expect(invoke).toHaveBeenCalledWith('set_settings_location', {
+      directory: 'D:\\Multi Mind',
+      request: {},
     });
   });
 
-  it('returns an error result instead of rejecting', async () => {
-    invoke.mockRejectedValue('permission denied');
+  it('carries the answer through on the second attempt', async () => {
+    invoke.mockResolvedValue({ status: 'ok', directory: 'D:\\Multi Mind' });
 
-    await expect(safeCommands.appInfo()).resolves.toStrictEqual({
-      ok: false,
-      error: 'permission denied',
+    await setSettingsLocation('D:\\Multi Mind', { conflict: 'adopt' });
+
+    expect(invoke).toHaveBeenCalledWith('set_settings_location', {
+      directory: 'D:\\Multi Mind',
+      request: { conflict: 'adopt' },
     });
+  });
+});
+
+describe('resetSettingsLocation', () => {
+  it('needs no folder, because the default is the one Rust knows', async () => {
+    invoke.mockResolvedValue({ status: 'ok', directory: '' });
+
+    await resetSettingsLocation();
+
+    expect(invoke).toHaveBeenCalledWith('reset_settings_location', { request: {} });
+  });
+});
+
+describe('browseSettingsLocation', () => {
+  it('asks for one folder and gives back what was chosen', async () => {
+    openDialog.mockResolvedValue('D:\\Multi Mind');
+
+    await expect(browseSettingsLocation('C:\\current')).resolves.toBe('D:\\Multi Mind');
+    expect(openDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ directory: true, multiple: false }),
+    );
+  });
+
+  it('answers null when the picker is cancelled', async () => {
+    openDialog.mockResolvedValue(null);
+
+    await expect(browseSettingsLocation()).resolves.toBeNull();
   });
 });
