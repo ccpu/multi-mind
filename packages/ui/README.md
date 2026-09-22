@@ -20,8 +20,8 @@ next to one without looking out of place.
 ```tsx
 import { Logo } from '@internal/ui';
 
-<Logo className="size-5 text-muted-foreground" />;        // decoration
-<Logo title="Multi Mind" />;                               // an image with a name
+<Logo className="size-5 text-muted-foreground" />; // decoration
+<Logo title="Multi Mind" />; // an image with a name
 ```
 
 The same drawing is the app icon in `apps/desktop/src-tauri/icons`, and the

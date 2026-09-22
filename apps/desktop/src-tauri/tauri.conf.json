@@ -22,7 +22,8 @@
         "center": true,
         "resizable": true,
         "decorations": true,
-        "backgroundColor": "#000000"
+        "backgroundColor": "#000000",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackForwardCache --enable-low-end-device-mode --process-per-site --js-flags=--optimize-for-size"
       }
     ],
     "security": {

@@ -8,19 +8,19 @@ Nothing here imports Tauri or React. That is the point — this is the part of t
 app that outlived a WinForms build and an Electron one, and it is where the
 behaviour is tested.
 
-| Module                | What it holds                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| `settings.ts`         | `AppSettings`, its defaults, and every edit made to it                                |
-| `settings-location.ts`| Where `settings.json` lives, and what moving it can run into                          |
-| `websites.ts`         | `WebsiteInfo`, the seeded catalogue, and how a site falls back to its seed            |
-| `prompts.ts`          | Prompt presets and how they wrap a typed prompt                                       |
-| `history-manager.ts`  | Port of `HistoryManager.cs`, quirks included                                          |
-| `layout.ts`           | How tall the prompt box is                                                            |
-| `scripts.ts`          | The JavaScript that goes into a guest: the prompt runner, the bridge reporters        |
-| `messages.ts`         | The guest bridge protocol and the per-run names its globals take                      |
-| `context-menu.ts`     | What the right-click menu offers, decided away from the shell                         |
-| `site-cookies.ts`     | Which cookies belong to a site, and the URL needed to delete one                       |
-| `guest-windows.ts`    | Whether a site's `window.open` stays in the app or goes to the browser                |
+| Module                 | What it holds                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `settings.ts`          | `AppSettings`, its defaults, and every edit made to it                         |
+| `settings-location.ts` | Where `settings.json` lives, and what moving it can run into                   |
+| `websites.ts`          | `WebsiteInfo`, the seeded catalogue, and how a site falls back to its seed     |
+| `prompts.ts`           | Prompt presets and how they wrap a typed prompt                                |
+| `history-manager.ts`   | Port of `HistoryManager.cs`, quirks included                                   |
+| `layout.ts`            | How tall the prompt box is                                                     |
+| `scripts.ts`           | The JavaScript that goes into a guest: the prompt runner, the bridge reporters |
+| `messages.ts`          | The guest bridge protocol and the per-run names its globals take               |
+| `context-menu.ts`      | What the right-click menu offers, decided away from the shell                  |
+| `site-cookies.ts`      | Which cookies belong to a site, and the URL needed to delete one               |
+| `guest-windows.ts`     | Whether a site's `window.open` stays in the app or goes to the browser         |
 
 ## Guest scripts
 

@@ -64,6 +64,37 @@ pub fn run() {
         .on_menu_event(|app, event| {
             app.state::<menu::PendingMenu>().resolve(&event);
         })
+        /*
+         * Three embedded chat sites is three renderers holding decoded images,
+         * rasterised tiles and compiled scripts against the next time they are
+         * drawn -- which, for a window that has been in the background since
+         * lunchtime, is not soon. WebView2 will give that back when it is told
+         * the webview is idle, so the window says when it is.
+         *
+         * Only the main window's own state counts: the browsers are its
+         * children, and the settings window coming and going says nothing
+         * about whether anyone is reading them.
+         */
+        .on_window_event(|window, event| {
+            if window.label() != guest::MAIN_WINDOW_LABEL {
+                return;
+            }
+
+            match event {
+                tauri::WindowEvent::Focused(focused) => {
+                    guest::on_window_focus(window.app_handle(), *focused);
+                }
+                // Windows reports a minimise as a resize to nothing, and there
+                // is no event of its own to listen for.
+                tauri::WindowEvent::Resized(_) => {
+                    guest::on_window_resized(
+                        window.app_handle(),
+                        window.is_minimized().unwrap_or(false),
+                    );
+                }
+                _ => {}
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
 

@@ -42,6 +42,19 @@ export function useGuestPanes(
   const elements = useRef(new Map<string, HTMLDivElement>());
   const lastPayload = useRef('');
 
+  /*
+   * The sites whose scripts Rust already holds.
+   *
+   * A pane's scripts are some kilobytes of source, they are the same on every
+   * pass, and Rust only ever reads them when it builds the webview. Sending
+   * them in each layout pass meant building and serialising all of that on
+   * every frame of a divider drag, which is the one moment the app can least
+   * afford it. So they go once per site and Rust keeps them; a site switched
+   * off drops out of this set with its browser, and sends them again if it
+   * comes back.
+   */
+  const sentScripts = useRef(new Set<string>());
+
   // Read inside a callback that must stay referentially stable, so registering
   // a box never re-runs the observers.
   const websitesRef = useRef(websites);
@@ -69,11 +82,22 @@ export function useGuestPanes(
         websiteId: website.id,
         url: website.url,
         bounds: readBounds(element),
-        scripts: createGuestScripts(website, config),
+        scripts: sentScripts.current.has(website.id)
+          ? []
+          : createGuestScripts(website, config),
       });
 
       return open;
     }, []);
+
+    // A site that has gone has taken Rust's copy of its scripts with it.
+    const open = new Set(panes.map((pane) => pane.websiteId));
+
+    for (const websiteId of sentScripts.current) {
+      if (!open.has(websiteId)) {
+        sentScripts.current.delete(websiteId);
+      }
+    }
 
     // A pane's box is remeasured on every render and on every resize, and is
     // usually the same box. Only a real move is worth a trip into Rust.
@@ -87,9 +111,18 @@ export function useGuestPanes(
 
     lastPayload.current = payload;
 
-    appApi.guest.sync(panes).catch((error: unknown) => {
-      console.error('Failed to lay out the embedded browsers:', error);
-    });
+    appApi.guest.sync(panes).then(
+      () => {
+        for (const pane of panes) {
+          sentScripts.current.add(pane.websiteId);
+        }
+      },
+      (error: unknown) => {
+        // The scripts went unrecorded, so the next pass sends them again --
+        // which is what a failed layout needs.
+        console.error('Failed to lay out the embedded browsers:', error);
+      },
+    );
   }, []);
 
   const register = useCallback(

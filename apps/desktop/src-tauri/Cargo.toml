@@ -36,6 +36,16 @@ serde_json = "1"
 rand = "0.8"
 url = "2"
 
+# WebView2's own memory knob, which is the one way to tell a browser nobody is
+# looking at it to give its caches back -- see `set_webview_memory_target` in
+# src/guest.rs. Both crates are ones Tauri already builds against, and the
+# versions are pinned to the ones it resolves: `with_webview` hands out
+# Tauri's `ICoreWebView2Controller`, so a different `windows` crate would be a
+# different, incompatible type.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 # Updating and staying in one process are desktop-only concerns; on mobile
 # there is no second launch to hand over and no installer to replace. Spelt out
 # as the platforms rather than as `cfg(desktop)`, because that one is set by

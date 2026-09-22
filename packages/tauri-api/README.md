@@ -20,11 +20,11 @@ const stop = appApi.events.onSettingsChanged(setSettings);
 await appApi.guest.run(websiteId, script);
 ```
 
-| Group           | What it covers                                                              |
-| --------------- | --------------------------------------------------------------------------- |
-| `invoke`        | Settings, where the settings file lives, opening a window                    |
-| `events`        | `onSettingsChanged`, `onGuestMessage` — each returns its own unsubscribe     |
-| `guest`         | The embedded browsers: sync, navigate, eval, cookies, menu, DevTools         |
+| Group    | What it covers                                                           |
+| -------- | ------------------------------------------------------------------------ |
+| `invoke` | Settings, where the settings file lives, opening a window                |
+| `events` | `onSettingsChanged`, `onGuestMessage` — each returns its own unsubscribe |
+| `guest`  | The embedded browsers: sync, navigate, eval, cookies, menu, DevTools     |
 
 `openExternal` is separate: it goes to the opener plugin rather than to a
 command of ours, and checks the protocol before it does.
@@ -37,6 +37,6 @@ change at a time — opening, closing and moving are the same layout pass, and
 reconciling from a complete picture is what keeps a divider drag from racing a
 site being switched on.
 
-Everything about *what* a guest should do stays in `@internal/multi-mind`: the
+Everything about _what_ a guest should do stays in `@internal/multi-mind`: the
 scripts it runs, what its right-click menu offers, which of its cookies belong
 to the site. This package only carries them across.

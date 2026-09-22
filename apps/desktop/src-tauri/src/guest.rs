@@ -12,9 +12,11 @@
 //! runs, the menu a right-click on it offers, which of its cookies belong to
 //! the site. This file carries those across and nothing more.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -45,6 +47,45 @@ const PROFILE_DIRECTORY: &str = "browser-profile";
 
 /// Event a guest's message is re-broadcast on, for the main window to answer.
 const GUEST_MESSAGE_EVENT: &str = "multi-mind://guest-message";
+
+/// How long the window has to stay unfocused before the browsers are asked to
+/// trim. Short enough that a window left behind stops holding the memory,
+/// long enough that alt-tabbing back and forth does not churn their caches.
+const IDLE_DELAY: Duration = Duration::from_secs(10);
+
+/// Chromium switches every webview in the app is started with.
+///
+/// Three panes of a chat site is three renderers, a browser process, a GPU
+/// process and the service processes behind them, and the defaults size all of
+/// those for a browser with one window per site rather than for an app that
+/// keeps three open side by side all day. These bring that down without
+/// touching anything the sandbox or the origin boundaries rest on — no
+/// `--renderer-process-limit`, which would let two sites share a renderer, and
+/// no `--disable-site-isolation-trials`.
+///
+/// One string for every webview, not one per window: WebView2 keys its browser
+/// process on the user-data folder *and* these arguments, so two webviews
+/// sharing a folder with different arguments cannot both be created. The panes
+/// and the sign-in windows share `browser-profile`, the app's own pages share
+/// the default folder, and keeping all four on one string is what makes that
+/// impossible to get wrong. `tauri.conf.json` repeats it for the main window,
+/// which is built from the config rather than from here — the test at the
+/// bottom of this file is what keeps the two copies the same.
+///
+/// - `msWebOOUI,msPdfOOUI,msSmartScreenProtection` is wry's own default, and
+///   overriding the argument string replaces it, so it has to be carried here.
+/// - `BackForwardCache` keeps a whole extra page alive per pane on the chance
+///   the user presses Back; the right-click Back that costs is a reload.
+/// - `--enable-low-end-device-mode` puts Chromium on its small-memory budgets:
+///   smaller V8 heaps, less decoded-image and tile cache. It is the largest
+///   single saving here and the only one with a cost — a very long transcript
+///   has a lower ceiling before its renderer gives up, and animation is a
+///   little cheaper-looking.
+/// - `--process-per-site` folds two panes on the same site, and a site's own
+///   iframes, into one renderer. Different sites stay in different processes:
+///   this is process reuse *within* an origin, not across.
+/// - `--optimize-for-size` is V8 choosing memory over speed.
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackForwardCache --enable-low-end-device-mode --process-per-site --js-flags=--optimize-for-size";
 
 fn guest_label(website_id: &str) -> String {
     format!("{GUEST_LABEL_PREFIX}{website_id}")
@@ -125,6 +166,21 @@ pub struct GuestHost {
     /// False while a divider is being dragged or a popover is open, because a
     /// child webview takes both the pointer and the pixels from the page.
     visible: AtomicBool,
+    /// The scripts each open guest was built with, keyed by site id.
+    ///
+    /// A layout pass is a whole list of panes, and the window sends one on
+    /// every frame of a divider drag. Carrying every guest's scripts in each of
+    /// those means serialising, shipping and re-allocating tens of kilobytes
+    /// sixty times a second for strings that are only ever read when a webview
+    /// is first built. So the window sends them once, for a pane it has not
+    /// opened yet, and they are kept here for the rebuild that a site switched
+    /// off and on again asks for.
+    scripts: Mutex<HashMap<String, Vec<String>>>,
+    /// Whether the browsers have been put on their small-memory budget.
+    idle: AtomicBool,
+    /// Bumped by every focus change, so the timer one of them starts can tell
+    /// that another has overtaken it.
+    idle_generation: AtomicU64,
 }
 
 impl GuestHost {
@@ -137,7 +193,36 @@ impl GuestHost {
             profile_directory,
             user_agent: identity::guest_user_agent(),
             visible: AtomicBool::new(true),
+            scripts: Mutex::new(HashMap::new()),
+            idle: AtomicBool::new(false),
+            idle_generation: AtomicU64::new(0),
         }
+    }
+
+    /// Remembers what a pane was sent, and answers with what its webview should
+    /// be built from — which is whatever was last sent for that site.
+    fn remember_scripts(&self, pane: &GuestPane) -> Vec<String> {
+        let mut cache = self
+            .scripts
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+
+        if !pane.scripts.is_empty() {
+            cache.insert(pane.website_id.clone(), pane.scripts.clone());
+        }
+
+        cache.get(&pane.website_id).cloned().unwrap_or_default()
+    }
+
+    /// Drops what is remembered for a site whose browser has been closed, so a
+    /// later one is built from scripts the window has sent since.
+    fn forget_scripts(&self, website_id: &str) {
+        let mut cache = self
+            .scripts
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+
+        cache.remove(website_id);
     }
 
     /// The bridge itself, which only Rust can write because only Rust knows how
@@ -179,9 +264,9 @@ impl GuestHost {
         )
     }
 
-    fn initialization_script(&self, pane: &GuestPane) -> String {
+    fn initialization_script(&self, scripts: &[String]) -> String {
         std::iter::once(self.bridge_script())
-            .chain(pane.scripts.iter().cloned())
+            .chain(scripts.iter().cloned())
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -242,6 +327,10 @@ pub async fn guest_sync(
     // with it.
     for (label, webview) in app.webviews() {
         if is_guest_label(&label) && !wanted.contains(&label) {
+            if let Some(website_id) = website_id_of(&label) {
+                host.forget_scripts(website_id);
+            }
+
             if let Err(error) = webview.close() {
                 eprintln!("Failed to close the browser for \"{label}\": {error}");
             }
@@ -255,6 +344,8 @@ pub async fn guest_sync(
         let position = LogicalPosition::new(pane.bounds.x, pane.bounds.y);
         let size = LogicalSize::new(pane.bounds.width.max(1.0), pane.bounds.height.max(1.0));
 
+        let scripts = host.remember_scripts(pane);
+
         if let Some(webview) = app.get_webview(&label) {
             webview.set_position(position).map_err(stringify)?;
             webview.set_size(size).map_err(stringify)?;
@@ -265,7 +356,7 @@ pub async fn guest_sync(
             .map_err(|error| format!("\"{}\" is not a URL: {error}", pane.url))?;
 
         let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
-            .initialization_script(host.initialization_script(pane))
+            .initialization_script(host.initialization_script(&scripts))
             // One profile for every pane, so a sign-in done in one is a
             // sign-in in all of them.
             .data_directory(host.profile_directory.clone())
@@ -275,6 +366,11 @@ pub async fn guest_sync(
             builder = builder.user_agent(user_agent);
         }
 
+        #[cfg(windows)]
+        {
+            builder = builder.additional_browser_args(BROWSER_ARGS);
+        }
+
         let webview = window
             .add_child(builder, position, size)
             .map_err(stringify)?;
@@ -282,6 +378,10 @@ pub async fn guest_sync(
         if !visible {
             let _ = webview.hide();
         }
+
+        // A site switched on while the window sits in the background should
+        // not be the one guest running on the full budget.
+        set_webview_memory_target(&webview, host.idle.load(Ordering::Relaxed));
     }
 
     Ok(())
@@ -319,6 +419,116 @@ pub async fn guest_set_visible(
     }
 
     Ok(())
+}
+
+/// Puts one browser on the small-memory budget, or takes it off again.
+///
+/// WebView2 answers this directly: `MemoryUsageTargetLevel` is the knob an app
+/// is meant to turn when it knows a webview is not being looked at, and the
+/// browser spends it on the caches a renderer can rebuild — decoded images,
+/// rasterised tiles, compiled code. It is not a suspend: timers keep running
+/// and a reply that is still streaming in keeps arriving, which is the whole
+/// reason it is this rather than `TrySuspend`.
+///
+/// Nothing here can fail in a way worth reporting — an older WebView2 runtime
+/// simply does not offer the interface, and the app is no worse off than it
+/// was — so every step is best-effort.
+#[cfg(windows)]
+fn set_webview_memory_target<R: Runtime>(webview: &Webview<R>, idle: bool) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+    };
+    use windows_core::Interface;
+
+    let level = if idle {
+        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+    } else {
+        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+    };
+
+    let _ = webview.with_webview(move |platform| unsafe {
+        let Ok(core) = platform.controller().CoreWebView2() else {
+            return;
+        };
+
+        let Ok(core) = core.cast::<ICoreWebView2_19>() else {
+            return;
+        };
+
+        let _ = core.SetMemoryUsageTargetLevel(level);
+    });
+}
+
+/// Only WebView2 has a budget to set; WebKit manages its own.
+#[cfg(not(windows))]
+fn set_webview_memory_target<R: Runtime>(_webview: &Webview<R>, _idle: bool) {}
+
+/// Puts every open browser on the small-memory budget, or takes them all off.
+///
+/// Guarded on the flag rather than applied every time, because the events that
+/// call this — a focus change, a resize — arrive in bursts, and each change of
+/// level costs the renderers the caches they then have to rebuild.
+fn set_idle<R: Runtime>(app: &AppHandle<R>, idle: bool) {
+    let host = app.state::<GuestHost>();
+
+    if host.idle.swap(idle, Ordering::Relaxed) == idle {
+        return;
+    }
+
+    for (label, webview) in app.webviews() {
+        if is_guest_label(&label) {
+            set_webview_memory_target(&webview, idle);
+        }
+    }
+}
+
+/// The main window gained or lost the user's attention.
+///
+/// Losing it waits: alt-tabbing out and straight back is not a reason to throw
+/// away three renderers' caches, so the budget only drops if the window is
+/// still in the background [`IDLE_DELAY`] later. Gaining it does not wait,
+/// because the first thing that happens next is the user reading a pane.
+pub fn on_window_focus<R: Runtime>(app: &AppHandle<R>, focused: bool) {
+    let generation = app
+        .state::<GuestHost>()
+        .idle_generation
+        .fetch_add(1, Ordering::Relaxed)
+        + 1;
+
+    if focused {
+        set_idle(app, false);
+        return;
+    }
+
+    let app = app.clone();
+
+    std::thread::spawn(move || {
+        std::thread::sleep(IDLE_DELAY);
+
+        // A focus change since this timer started has already decided the
+        // question, and may have decided it the other way.
+        if app
+            .state::<GuestHost>()
+            .idle_generation
+            .load(Ordering::Relaxed)
+            == generation
+        {
+            set_idle(&app, true);
+        }
+    });
+}
+
+/// A minimised window is not being read by anyone, so its browsers go on the
+/// small budget at once rather than waiting out [`IDLE_DELAY`].
+pub fn on_window_resized<R: Runtime>(app: &AppHandle<R>, minimized: bool) {
+    if minimized {
+        app.state::<GuestHost>()
+            .idle_generation
+            .fetch_add(1, Ordering::Relaxed);
+
+        set_idle(app, true);
+    }
 }
 
 /// Port of `WebViewManager.Reload`: back to the site's configured URL.
@@ -451,6 +661,13 @@ pub async fn guest_open_popup(
         builder = builder.user_agent(user_agent);
     }
 
+    // The sign-in window is on `browser-profile` with the panes, so WebView2
+    // will only build it if it asks for the same arguments they did.
+    #[cfg(windows)]
+    {
+        builder = builder.additional_browser_args(BROWSER_ARGS);
+    }
+
     builder.build().map_err(stringify)?;
 
     Ok(())
@@ -533,7 +750,7 @@ mod tests {
             scripts: vec!["/* reporter */".into()],
         };
 
-        let script = host.initialization_script(&pane);
+        let script = host.initialization_script(&host.remember_scripts(&pane));
         let bridge_at = script.find("guest_message").expect("bridge");
         let reporter_at = script.find("/* reporter */").expect("reporter");
 
@@ -545,5 +762,83 @@ mod tests {
         assert!(is_guest_label("chat-claude"));
         assert!(!is_guest_label("main"));
         assert!(!is_guest_label("settings"));
+    }
+
+    #[test]
+    fn a_pane_only_has_to_send_its_scripts_once() {
+        let host = GuestHost::new(PathBuf::from("."));
+        let mut pane = GuestPane {
+            website_id: "claude".into(),
+            url: "https://claude.ai/new".into(),
+            bounds: GuestBounds {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+            scripts: vec!["/* reporter */".into()],
+        };
+
+        assert_eq!(host.remember_scripts(&pane), vec!["/* reporter */"]);
+
+        // What the window sends on every frame of a divider drag.
+        pane.scripts = Vec::new();
+        assert_eq!(host.remember_scripts(&pane), vec!["/* reporter */"]);
+
+        // Switching the site off has to take the memory of it too, so the one
+        // switched on afterwards is built from what the window sends then.
+        host.forget_scripts("claude");
+        assert!(host.remember_scripts(&pane).is_empty());
+    }
+
+    /*
+     * WebView2 keys its browser process on the user-data folder together with
+     * the arguments it was started with, and refuses a second webview on the
+     * same folder asking for different ones. The panes and the sign-in window
+     * take BROWSER_ARGS from this file; the main window is built from the
+     * config and the settings window has to match it, so the string is written
+     * twice. This is what notices when only one of them is edited.
+     */
+    #[test]
+    fn the_config_asks_for_the_same_browser_arguments() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+
+        let configured = config["app"]["windows"][0]["additionalBrowserArgs"]
+            .as_str()
+            .expect("the main window should name its browser arguments");
+
+        assert_eq!(configured, BROWSER_ARGS);
+    }
+
+    /*
+     * Everything in BROWSER_ARGS is about memory. A switch that widens what a
+     * renderer may reach -- or that lets two sites share one -- is not, and
+     * the saving would never be worth it.
+     */
+    #[test]
+    fn the_browser_arguments_leave_the_sandbox_alone() {
+        for forbidden in [
+            "--disable-site-isolation-trials",
+            "--disable-web-security",
+            "--no-sandbox",
+            "--renderer-process-limit",
+            "--single-process",
+            "--allow-running-insecure-content",
+        ] {
+            assert!(
+                !BROWSER_ARGS.contains(forbidden),
+                "{forbidden} has no place in BROWSER_ARGS"
+            );
+        }
+
+        // Overriding the argument string replaces wry's own default, so what
+        // it turned off has to still be off.
+        assert!(BROWSER_ARGS.contains("msWebOOUI"));
+        assert!(BROWSER_ARGS.contains("msPdfOOUI"));
+
+        // Chromium reads only the last --disable-features it is given, so
+        // there may only ever be one.
+        assert_eq!(BROWSER_ARGS.matches("--disable-features").count(), 1);
     }
 }

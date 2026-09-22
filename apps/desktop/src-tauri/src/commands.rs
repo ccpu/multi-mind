@@ -88,12 +88,22 @@ pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResul
         };
     };
 
-    let built = WebviewWindowBuilder::new(&app, &window_name, WebviewUrl::App(page.into()))
+    let mut builder = WebviewWindowBuilder::new(&app, &window_name, WebviewUrl::App(page.into()))
         .title(title)
         .inner_size(width, height)
         .min_inner_size(560.0, 420.0)
-        .center()
-        .build();
+        .center();
+
+    // This window shares the default user-data folder with the main one, and
+    // WebView2 will only build a second webview on a folder if it asks for the
+    // arguments the first did. `tauri.conf.json` gives the main window
+    // `guest::BROWSER_ARGS`; this is the other half of that pair.
+    #[cfg(windows)]
+    {
+        builder = builder.additional_browser_args(crate::guest::BROWSER_ARGS);
+    }
+
+    let built = builder.build();
 
     match built {
         Ok(_) => OpenWindowResult {
