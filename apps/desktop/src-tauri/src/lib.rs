@@ -40,6 +40,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::open_window,
+            commands::new_window,
             settings::get_settings,
             settings::save_settings,
             settings::get_settings_location,
@@ -69,28 +70,40 @@ pub fn run() {
          * rasterised tiles and compiled scripts against the next time they are
          * drawn -- which, for a window that has been in the background since
          * lunchtime, is not soon. WebView2 will give that back when it is told
-         * the webview is idle, so the window says when it is.
+         * the webview is idle, so each window says when it is.
          *
-         * Only the main window's own state counts: the browsers are its
+         * Only a main window's own state counts: the browsers are its
          * children, and the settings window coming and going says nothing
-         * about whether anyone is reading them.
+         * about whether anyone is reading them. Every main window is asked
+         * separately, so a second one left behind gives its memory back while
+         * the one in front keeps its caches.
          */
         .on_window_event(|window, event| {
-            if window.label() != guest::MAIN_WINDOW_LABEL {
+            let label = window.label();
+
+            if !guest::is_main_window_label(label) {
                 return;
             }
 
             match event {
                 tauri::WindowEvent::Focused(focused) => {
-                    guest::on_window_focus(window.app_handle(), *focused);
+                    guest::on_window_focus(window.app_handle(), label, *focused);
                 }
                 // Windows reports a minimise as a resize to nothing, and there
                 // is no event of its own to listen for.
                 tauri::WindowEvent::Resized(_) => {
                     guest::on_window_resized(
                         window.app_handle(),
+                        label,
                         window.is_minimized().unwrap_or(false),
                     );
+                }
+                // A window closing takes its browsers with it, so what the app
+                // remembered about its row goes too -- otherwise opening and
+                // closing windows all day would leave a row's worth of
+                // injected scripts behind for each one.
+                tauri::WindowEvent::Destroyed => {
+                    guest::on_window_closed(window.app_handle(), label);
                 }
                 _ => {}
             }
@@ -121,7 +134,8 @@ fn configure_desktop<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
     let builder = builder
         .plugin(tauri_plugin_process::init())
         /*
-         * Every launch of Multi Mind lands in one process.
+         * Every launch of Multi Mind lands in one process, and every launch
+         * after the first opens another window in it.
          *
          * The windows have to share a process because they share their data:
          * the signed-in sites live in one browser profile, and the webview
@@ -130,15 +144,29 @@ fn configure_desktop<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
          * every site, and both of them writing those files is how a profile
          * gets corrupted.
          *
-         * So the first process keeps the lock, and a second launch is answered
-         * by raising the window that is already up — an instance in the sense
-         * the user means, with the logins still in it.
+         * So the first process keeps the lock and answers the second launch
+         * with a window of its own -- as many as are asked for, each with the
+         * logins already in it, and all of them sharing one browser process
+         * rather than starting a second set of renderers. It is an instance in
+         * the sense the user means.
          */
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window(guest::MAIN_WINDOW_LABEL) {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
+            // Somewhere to cascade the new window from, if a window is up.
+            let near = app
+                .windows()
+                .into_iter()
+                .find(|(label, _)| guest::is_main_window_label(label))
+                .map(|(_, window)| window);
+
+            if let Err(error) = commands::open_main_window(app, near.as_ref()) {
+                eprintln!("Failed to answer a second launch with a window: {error}");
+
+                // Better a raised window than nothing at all.
+                if let Some(window) = near {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
             }
         }));
 

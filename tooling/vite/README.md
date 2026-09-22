@@ -22,7 +22,7 @@ export default createAppViteConfig({
 | Default                                  | Why                                                                      |
 | ---------------------------------------- | ------------------------------------------------------------------------ |
 | React + Tailwind v4 plugins              | The whole workspace is React and Tailwind; no window repeats the wiring. |
-| `server.port: 1420`, `strictPort`        | `devUrl` in `tauri.conf.json` is a fixed URL, so the port cannot drift.  |
+| `server.port: 1422`, `strictPort`        | `devUrl` in `tauri.conf.json` is a fixed URL, so the port cannot drift.  |
 | `server.host` from `TAURI_DEV_HOST`      | Lets a device or VM reach the dev server; unset means localhost only.    |
 | `clearScreen: false`                     | Keeps `cargo` errors on screen.                                          |
 | `watch.ignored: ['**/src-tauri/**']`     | The Tauri CLI already watches the Rust sources.                          |

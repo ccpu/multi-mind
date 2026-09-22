@@ -213,6 +213,25 @@ function App() {
     setPrompt(next);
   }, []);
 
+  /**
+   * **New Window**: another copy of this one, sharing the browser profile and
+   * so every sign-in in it. The Rust side decides where it goes and what it is
+   * called; there is nothing for this window to hand over, because everything
+   * the new one needs is in the settings file both of them read.
+   */
+  const openNewWindow = useCallback(() => {
+    appApi.invoke.newWindow().then(
+      (result) => {
+        if (!result.success) {
+          console.error(result.message);
+        }
+      },
+      (error: unknown) => {
+        console.error('Failed to open another window:', error);
+      },
+    );
+  }, []);
+
   /** Typing in or clicking the prompt box takes it back to its full size. */
   const expandPrompt = useCallback(() => {
     setBottomPercent(settingsRef.current.panelButtonSize);
@@ -229,6 +248,7 @@ function App() {
         onNextPrompt={goNextPrompt}
         onToggleWebsite={toggleWebsite}
         onOpenSettings={openSettings}
+        onNewWindow={openNewWindow}
       />
 
       <div

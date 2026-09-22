@@ -49,7 +49,7 @@ itself, and with `SKIP_SETUP_CHECK=1`.
 | `pnpm format` / `pnpm format:fix` | Prettier                                             |
 | `pnpm rust:fmt` / `pnpm rust:lint` / `pnpm rust:test` | rustfmt, clippy, cargo test      |
 | `pnpm fix:all`     | Format, lint and type-check in one go                               |
-| `pnpm gen:icons`   | Regenerates the icon set from `apps/desktop/app-icon.png`            |
+| `pnpm gen:icons`   | Regenerates the icon set from `apps/desktop/public/logo.svg`          |
 | `pnpm gen:package` | Scaffolds a new workspace package                                   |
 
 Anything under `apps/` or `packages/` can also be targeted directly:

@@ -10,8 +10,8 @@ catalogs:
       specifier: ^3.22.1
       version: 3.22.1
     '@pixpilot/vite-plugin-source-inspector':
-      specifier: ^0.2.0
-      version: 0.2.0
+      specifier: ^0.3.0
+      version: 0.3.0
     '@tailwindcss/vite':
       specifier: ^4.3.3
       version: 4.3.3
@@ -637,7 +637,7 @@ importers:
     dependencies:
       '@pixpilot/vite-plugin-source-inspector':
         specifier: catalog:dev
-        version: 0.2.0(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))
+        version: 0.3.0(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))
       '@tailwindcss/vite':
         specifier: catalog:dev
         version: 4.3.3(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))
@@ -1796,8 +1796,8 @@ packages:
     peerDependencies:
       tsdown: '>=0.15.0'
 
-  '@pixpilot/vite-plugin-source-inspector@0.2.0':
-    resolution: {integrity: sha512-ZWXeXTInb4RO4zjA7+K0UJGjxzUg8yJ3/K+MR7OrqJT3GDllXBWX9oxS+/IYzDWYXnlFvwSJKTFd8yFjxVBfAQ==}
+  '@pixpilot/vite-plugin-source-inspector@0.3.0':
+    resolution: {integrity: sha512-t/bjIRRIc6wz+loyrXdZyGRFoeNbI66fnUIh5wPZjNohrksyqXPGL7eAv/OaX41uOY8jcfS9Vx7zTJCVBfeSJA==}
     peerDependencies:
       vite: ^7.3.6
 
@@ -8440,7 +8440,7 @@ snapshots:
       glob: 11.1.0
       tsdown: 0.23.0(tsx@4.23.13)(typescript@6.0.3)(unrun@0.3.0(synckit@0.11.13))
 
-  '@pixpilot/vite-plugin-source-inspector@0.2.0(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))':
+  '@pixpilot/vite-plugin-source-inspector@0.3.0(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1))':
     dependencies:
       typescript: 6.0.3
       vite: 8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.43.1)(tsx@4.23.13)(yaml@2.9.1)

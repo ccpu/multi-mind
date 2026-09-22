@@ -13,9 +13,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use tauri::menu::{ContextMenu, Menu, MenuEvent, MenuItemBuilder, PredefinedMenuItem};
-use tauri::{AppHandle, LogicalPosition, Manager, State};
-
-use crate::guest::MAIN_WINDOW_LABEL;
+use tauri::{AppHandle, LogicalPosition, State, Window};
 
 /// How long to wait for the popup itself to come back. Only a menu left open
 /// for longer than anyone would gets this far.
@@ -66,22 +64,24 @@ fn selection_grace() -> Duration {
     }
 }
 
-/// Pops a native menu over the main window and answers with what was chosen.
+/// Pops a native menu over the window that asked for it and answers with what
+/// was chosen.
+///
+/// The window comes from the call rather than by name, because there may be
+/// several main windows and the menu belongs over the pane that was
+/// right-clicked — the point below is measured from that window's corner.
 ///
 /// `null` for a menu dismissed without a choice, which is not something a
 /// popup menu reports on any platform — it is simply a wait that ends.
 #[tauri::command]
 pub async fn guest_popup_menu(
     app: AppHandle,
+    window: Window,
     pending: State<'_, PendingMenu>,
     entries: Vec<NativeMenuEntry>,
     x: f64,
     y: f64,
 ) -> Result<Option<String>, String> {
-    let window = app
-        .get_window(MAIN_WINDOW_LABEL)
-        .ok_or("The main window is not open.")?;
-
     let (picked_tx, picked_rx) = channel::<String>();
     let (shown_tx, shown_rx) = channel::<Result<(), String>>();
 

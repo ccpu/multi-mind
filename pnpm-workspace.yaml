@@ -9,7 +9,7 @@ packages:
 catalogs:
   dev:
     '@pixpilot/dev-config': ^3.22.1
-    '@pixpilot/vite-plugin-source-inspector': ^0.2.0
+    '@pixpilot/vite-plugin-source-inspector': ^0.3.0
     '@tailwindcss/vite': ^4.3.3
     '@tauri-apps/cli': ^2.11.5
     '@testing-library/jest-dom': ^7.0.1

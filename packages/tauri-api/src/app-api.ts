@@ -3,6 +3,7 @@ import {
   browseSettingsLocation,
   getSettings,
   getSettingsLocation,
+  newWindow,
   openWindow,
   resetSettingsLocation,
   saveSettings,
@@ -46,6 +47,7 @@ export const appApi = {
     setSettingsLocation,
     resetSettingsLocation,
     openWindow,
+    newWindow,
   },
 
   /** Things Rust announces, each returning its own unsubscribe. */
@@ -54,7 +56,7 @@ export const appApi = {
     onGuestMessage,
   },
 
-  /** The embedded browsers, which only the main window drives. */
+  /** The embedded browsers, which only a main window drives. */
   guest: {
     sync: guestSync,
     setVisible: guestSetVisible,

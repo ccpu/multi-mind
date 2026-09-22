@@ -6,8 +6,17 @@
 //! wrapped with its return type in `@internal/tauri-api`. Keep the four in
 //! step: a bridge call is a string, and nothing else will catch a rename.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, Window};
+
+use crate::guest;
+
+/// How far a new main window is put down and to the right of the one it was
+/// asked for from, so a second copy does not land exactly on top of the first
+/// and look like nothing happened.
+const CASCADE_OFFSET: f64 = 32.0;
 
 /// Returned by [`app_info`]. Serialised as camelCase to match the TypeScript
 /// interface in `packages/tauri-api/src/types.ts`.
@@ -116,6 +125,109 @@ pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResul
         Err(error) => OpenWindowResult {
             success: false,
             message: format!("Failed to open window \"{window_name}\": {error}"),
+        },
+    }
+}
+
+/// The label the next main window should take.
+///
+/// `main` when it is free — which it is on the very first launch, and again if
+/// the first window is the one that was closed — and the lowest free `main-N`
+/// otherwise. Lowest rather than next, so closing and reopening windows does
+/// not walk the numbers up forever and leave the window-state file remembering
+/// a geometry per number.
+///
+/// Both the windows and the webviews are asked, because a label has to be free
+/// in either namespace and neither list is the whole story: a main window is
+/// missing from `webview_windows()` the moment it has a second webview in it —
+/// which, here, is as soon as one chat site is open — and its browsers are
+/// missing from `windows()`.
+fn next_main_window_label<R: Runtime>(app: &AppHandle<R>) -> String {
+    let taken: HashSet<String> = app
+        .windows()
+        .into_keys()
+        .chain(app.webviews().into_keys())
+        .collect();
+
+    if !taken.contains(guest::MAIN_WINDOW_LABEL) {
+        return guest::MAIN_WINDOW_LABEL.to_string();
+    }
+
+    (2u32..)
+        .map(|number| format!("{}{number}", guest::EXTRA_MAIN_WINDOW_PREFIX))
+        .find(|label| !taken.contains(label))
+        .unwrap_or_else(|| format!("{}2", guest::EXTRA_MAIN_WINDOW_PREFIX))
+}
+
+/// Where to put a window opened from `near`, in logical pixels.
+///
+/// `None` when there is nothing to cascade from, or when the platform will not
+/// say where that window is — in which case the window falls back to the
+/// `center` the config asks for.
+fn cascade_position<R: Runtime>(near: Option<&Window<R>>) -> Option<(f64, f64)> {
+    let window = near?;
+    let scale = window.scale_factor().ok()?;
+    let position = window.outer_position().ok()?.to_logical::<f64>(scale);
+
+    Some((position.x + CASCADE_OFFSET, position.y + CASCADE_OFFSET))
+}
+
+/// Opens another main window.
+///
+/// This is what "another instance" means here. A second *process* cannot be
+/// one: the signed-in sites live in a single browser profile, and the webview
+/// locks that profile's cookie and storage databases to whichever process
+/// opened them first — so a second process would come up signed out of
+/// everything, and both of them writing those files is how a profile gets
+/// corrupted. A second window in this process shares the profile, and with it
+/// every sign-in.
+///
+/// It is built from the same configuration the first window is, so the two are
+/// the same window in every respect that matters — including the browser
+/// arguments, which WebView2 requires every webview on a user-data folder to
+/// agree on.
+pub fn open_main_window<R: Runtime>(
+    app: &AppHandle<R>,
+    near: Option<&Window<R>>,
+) -> Result<String, String> {
+    let mut config = app
+        .config()
+        .app
+        .windows
+        .first()
+        .cloned()
+        .ok_or("The app has no window to copy.")?;
+
+    config.label = next_main_window_label(app);
+
+    if let Some((x, y)) = cascade_position(near) {
+        config.center = false;
+        config.x = Some(x);
+        config.y = Some(y);
+    }
+
+    let label = config.label.clone();
+
+    WebviewWindowBuilder::from_config(app, &config)
+        .map_err(|error| error.to_string())?
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    Ok(label)
+}
+
+/// **New Window** in the menu bar: another copy of the main window, signed in
+/// to everything this one is.
+#[tauri::command]
+pub async fn new_window(app: AppHandle, window: Window) -> OpenWindowResult {
+    match open_main_window(&app, Some(&window)) {
+        Ok(label) => OpenWindowResult {
+            success: true,
+            message: format!("Window \"{label}\" opened successfully."),
+        },
+        Err(error) => OpenWindowResult {
+            success: false,
+            message: format!("Failed to open another window: {error}"),
         },
     }
 }

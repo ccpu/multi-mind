@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the app's own two windows may do. Both are local pages the app ships, so they get every command it has; an embedded chat site is covered by guest.json instead and gets one.",
-  "windows": ["main", "settings"],
+  "description": "What the app's own windows may do -- the main window, the copies of it opened since (main-2, main-3, ...) and the settings window. They are all local pages the app ships, so they get every command it has; an embedded chat site is covered by guest.json instead and gets one.",
+  "windows": ["main", "main-*", "settings"],
   "permissions": [
     "core:default",
     "clipboard-manager:allow-read-text",
@@ -11,6 +11,7 @@
     "opener:default",
     "allow-app-info",
     "allow-open-window",
+    "allow-new-window",
     "allow-get-settings",
     "allow-save-settings",
     "allow-get-settings-location",

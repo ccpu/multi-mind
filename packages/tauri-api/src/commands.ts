@@ -113,3 +113,16 @@ export async function resetSettingsLocation(
 export async function openWindow(windowName: string): Promise<OpenWindowResult> {
   return invoke<OpenWindowResult>('open_window', { windowName });
 }
+
+/**
+ * Opens another main window — the app's answer to "run a second instance".
+ *
+ * A second process cannot be one: the signed-in sites live in a single browser
+ * profile, and the webview locks that profile to whichever process opened it
+ * first, so a second process would come up signed out of everything. Another
+ * window in this one shares the profile, and with it every sign-in; it also
+ * shares the browser process, so it costs a page rather than a browser.
+ */
+export async function newWindow(): Promise<OpenWindowResult> {
+  return invoke<OpenWindowResult>('new_window');
+}

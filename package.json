@@ -42,7 +42,7 @@
     "dev:web": "pnpm --filter @app/desktop dev",
     "tauri": "pnpm --filter @app/desktop tauri",
     "bundle": "pnpm --filter @app/desktop tauri build",
-    "gen:icons": "pnpm --filter @app/desktop tauri icon",
+    "gen:icons": "pnpm --filter @app/desktop tauri icon public/logo.svg",
     "build": "turbo run build",
     "tsc:watch": "pnpm exec tsc --noEmit --watch --project tsconfig.watch.json",
     "format": "turbo run format --continue -- --cache --cache-location .cache/.prettiercache",

@@ -9,6 +9,7 @@ import App from '../src/windows/main/App';
 const settingsGet = vi.fn<() => Promise<AppSettings>>();
 const settingsSave = vi.fn<(patch: Partial<AppSettings>) => Promise<AppSettings>>();
 const openWindow = vi.fn<(windowName: string) => Promise<{ success: boolean }>>();
+const newWindow = vi.fn<() => Promise<{ success: boolean; message: string }>>();
 const guestSync = vi.fn<(panes: readonly GuestPane[]) => Promise<void>>();
 const guestRun = vi.fn<(websiteId: string, script: string) => Promise<void>>();
 const guestNavigate = vi.fn<(websiteId: string, url: string) => Promise<void>>();
@@ -21,6 +22,7 @@ vi.mock('@internal/tauri-api', () => ({
       getSettings: async () => settingsGet(),
       saveSettings: async (patch: Partial<AppSettings>) => settingsSave(patch),
       openWindow: async (windowName: string) => openWindow(windowName),
+      newWindow: async () => newWindow(),
       getGuestConfig: async () => ({ bridgeKey: '_bridge', findKey: '_find' }),
     },
     events: {
@@ -74,6 +76,10 @@ beforeEach(() => {
   settingsGet.mockResolvedValue(stub({ promptEditor: 'plain' }));
   settingsSave.mockImplementation(async (patch) => stub(patch));
   openWindow.mockResolvedValue({ success: true });
+  newWindow.mockResolvedValue({
+    success: true,
+    message: 'Window "main-2" opened successfully.',
+  });
   guestSync.mockResolvedValue(undefined);
   guestRun.mockResolvedValue(undefined);
   guestNavigate.mockResolvedValue(undefined);
@@ -109,6 +115,20 @@ describe('main window', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(openWindow).toHaveBeenCalledWith('settings');
+  });
+
+  /*
+   * Another instance is another window in this process, because the signed-in
+   * sites live in one browser profile that only one process may hold open.
+   * Which window it becomes is Rust's to decide, so the press carries nothing.
+   */
+  it('opens another main window from the menu strip', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'New Window' }));
+
+    expect(newWindow).toHaveBeenCalledTimes(1);
   });
 
   it('lists every enabled website as a toggle, unticked while closed', async () => {

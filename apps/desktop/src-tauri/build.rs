@@ -9,11 +9,12 @@ fn main() {
     // the guests that one and nothing else.
     //
     // The cost is that every other command now needs granting too, which
-    // capabilities/default.json does for the app's own two windows.
+    // capabilities/default.json does for the app's own windows.
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "app_info",
             "open_window",
+            "new_window",
             "get_settings",
             "save_settings",
             "get_settings_location",

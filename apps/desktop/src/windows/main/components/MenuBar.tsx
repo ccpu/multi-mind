@@ -8,7 +8,15 @@ import {
   DropdownMenuTrigger,
 } from '@pixpilot/shadcn';
 import { Button, ToggleButton } from '@pixpilot/shadcn-ui';
-import { Columns3, History, MessageCircle, Redo2, Settings, Undo2 } from 'lucide-react';
+import {
+  Columns3,
+  Copy,
+  History,
+  MessageCircle,
+  Redo2,
+  Settings,
+  Undo2,
+} from 'lucide-react';
 
 interface MenuBarProps {
   /** The sites enabled in the settings window, in the order set there. */
@@ -21,6 +29,8 @@ interface MenuBarProps {
   onNextPrompt: () => void;
   onToggleWebsite: (websiteId: string) => void;
   onOpenSettings: () => void;
+  /** Opens another copy of this window, signed in to the same sites. */
+  onNewWindow: () => void;
 }
 
 /**
@@ -38,6 +48,7 @@ export function MenuBar({
   onNextPrompt,
   onToggleWebsite,
   onOpenSettings,
+  onNewWindow,
 }: MenuBarProps) {
   return (
     <header className="flex h-10 shrink-0 items-center gap-1 border-b bg-background px-2 select-none">
@@ -71,6 +82,10 @@ export function MenuBar({
       <Button variant="ghost" size="sm" onClick={onResetLayout}>
         <Columns3 />
         Reset Layout
+      </Button>
+      <Button variant="ghost" size="sm" onClick={onNewWindow}>
+        <Copy />
+        New Window
       </Button>
       <Button variant="ghost" size="sm" onClick={onOpenSettings}>
         <Settings />
