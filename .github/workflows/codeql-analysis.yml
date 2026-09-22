@@ -1,0 +1,52 @@
+name: CodeQL Analyser
+
+permissions:
+  security-events: write
+  actions: read
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  schedule:
+    #        ┌───────────── minute (0 - 59)
+    #        │  ┌───────────── hour (0 - 23)
+    #        │  │ ┌───────────── day of the month (1 - 31)
+    #        │  │ │ ┌───────────── month (1 - 12 or JAN-DEC)
+    #        │  │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
+    #        │  │ │ │ │
+    #        *  * * * *
+    - cron: '30 1 * * 0' # Every Sunday at 01:30 UTC
+
+jobs:
+  codeql-analysis:
+    name: Analyse ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Rust analysis needs the webview toolchain and a full cargo build, so
+        # it is left out. Add `rust` here plus the apt step from ci.yml if you
+        # want the backend scanned too.
+        language:
+          - javascript-typescript
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: .github/codeql/codeql-config.yml
+
+      - name: Run CodeQL Scanner
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

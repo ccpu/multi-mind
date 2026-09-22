@@ -1,0 +1,50 @@
+# Cuts a release from a version tag.
+#
+#   pnpm version 1.2.0   # or edit the three version fields by hand
+#   git tag v1.2.0 && git push --tags
+#
+# The tag is the trigger: CI runs, then every platform is built and the
+# installers are attached to a draft GitHub release named after the tag.
+# Review it and publish when it looks right.
+#
+# Versions live in apps/desktop/package.json, src-tauri/Cargo.toml and
+# src-tauri/tauri.conf.json. The last one names the installers, so it is the
+# one that has to match the tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag-name:
+        description: Existing tag to build and attach installers to, e.g. `v1.2.0`.
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    name: Build and release
+    needs: ci
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    with:
+      tag-name: ${{ inputs.tag-name || github.ref_name }}
+      # Publishing stays a manual click, so a bad build never ships on its own.
+      release-draft: true

@@ -1,0 +1,10 @@
+{
+  "extends": "@internal/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": ["*.js", "*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

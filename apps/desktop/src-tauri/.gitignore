@@ -1,0 +1,3 @@
+# Cargo build output and the generated mobile/schema files.
+/target/
+/gen/

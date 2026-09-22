@@ -1,0 +1,34 @@
+{
+  "name": "@internal/vite",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./app": {
+      "types": "./app.d.ts",
+      "default": "./app.js"
+    }
+  },
+  "scripts": {
+    "clean:all": "git clean -xdf .cache .turbo node_modules",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
+    "format:fix": "prettier --write . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "catalog:dev",
+    "@vitejs/plugin-react": "catalog:dev",
+    "vite": "catalog:dev"
+  },
+  "devDependencies": {
+    "@internal/eslint-config": "workspace:*",
+    "@internal/prettier-config": "workspace:*",
+    "@internal/tsconfig": "workspace:*",
+    "@types/node": "catalog:dev",
+    "eslint": "catalog:dev",
+    "prettier": "catalog:dev",
+    "typescript": "catalog:dev"
+  },
+  "prettier": "@internal/prettier-config"
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "ui": "tui",
+  "remoteCache": {
+    "enabled": false,
+    "teamId": ""
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".cache/tsbuildinfo.json",
+        "dist/**"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "tauri:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "tauri:build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false
+    },
+    "format": {
+      "outputs": [
+        ".cache/.prettiercache"
+      ],
+      "outputLogs": "new-only"
+    },
+    "lint": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".cache/.eslintcache"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".cache/tsbuildinfo.json"
+      ]
+    },
+    "clean:all": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": []
+    },
+    "test:coverage": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "coverage/**"
+      ]
+    }
+  },
+  "globalEnv": [
+    "TAURI_SIGNING_PRIVATE_KEY",
+    "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+  ],
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "CI",
+    "TAURI_DEV_HOST",
+    "TAURI_ENV_PLATFORM",
+    "TAURI_ENV_ARCH",
+    "TAURI_ENV_FAMILY",
+    "TAURI_ENV_DEBUG",
+    "TAURI_ENV_TARGET_TRIPLE"
+  ]
+}

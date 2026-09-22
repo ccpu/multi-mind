@@ -1,0 +1,89 @@
+# Checks that run on every push and pull request, and ahead of a release.
+#
+# The frontend and the Rust backend are separate jobs so a failure names the
+# side it came from. Neither job bundles installers - that is build.yml, which
+# takes minutes rather than seconds.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - next
+  pull_request:
+    branches:
+      - main
+      - master
+      - next
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Lint, types and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup project
+        uses: pixpilot/github-actions/setup-pnpm-project@v1
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Prettier check
+        run: pnpm format
+
+      - name: TypeScript check
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux webview dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup project
+        uses: pixpilot/github-actions/setup-pnpm-project@v1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./apps/desktop/src-tauri -> target
+
+      # `tauri::generate_context!` embeds the built frontend at compile time,
+      # so the Rust crate does not compile until dist/ exists.
+      - name: Build the frontend
+        run: pnpm --filter @app/desktop build
+
+      - name: Check formatting
+        run: pnpm rust:fmt
+
+      - name: Clippy
+        run: pnpm rust:lint
+
+      - name: Cargo test
+        run: pnpm rust:test

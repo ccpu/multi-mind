@@ -1,0 +1,102 @@
+# Builds the installers on every platform.
+#
+# Called by release.yml, and runnable on its own to check that a change still
+# packages everywhere. With `tag-name` set it creates or updates a draft GitHub
+# release and attaches the installers; without it the installers are uploaded
+# as workflow artifacts and nothing is published.
+
+name: Build
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag-name:
+        description: >-
+          Tag of the release to attach the installers to, e.g. `v1.2.0`.
+          Leave empty to only upload workflow artifacts.
+        required: false
+        type: string
+        default: ''
+      release-draft:
+        description: Keep the release a draft so it can be reviewed before it goes out.
+        required: false
+        type: boolean
+        default: true
+
+# No `permissions` block: a reusable workflow cannot ask for more than its
+# caller granted, so the scopes are the caller's to set. `contents: write` is
+# needed only when `tag-name` is passed.
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            label: macOS (Apple silicon)
+            args: --target aarch64-apple-darwin
+            rust-targets: aarch64-apple-darwin
+          - platform: macos-latest
+            label: macOS (Intel)
+            args: --target x86_64-apple-darwin
+            rust-targets: x86_64-apple-darwin
+          - platform: ubuntu-latest
+            label: Linux
+            args: ''
+            rust-targets: ''
+          - platform: windows-latest
+            label: Windows
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The AppImage produced here only runs on distributions whose glibc is at
+      # least as new as the runner's. Pin an older Ubuntu image if you need to
+      # support older distributions.
+      - name: Install Linux webview dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Setup project
+        uses: pixpilot/github-actions/setup-pnpm-project@v1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./apps/desktop/src-tauri -> target
+          # A failed build still leaves most dependencies compiled.
+          cache-on-failure: true
+
+      # tauri-action runs the frontend build through `beforeBuildCommand`, then
+      # `tauri build`, then uploads whatever the bundler produced.
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ inputs.tag-name }}
+          releaseName: ${{ inputs.tag-name }}
+          releaseDraft: ${{ inputs.release-draft }}
+          prerelease: false
+          generateReleaseNotes: ${{ inputs.tag-name != '' }}
+          uploadWorkflowArtifacts: true
+          args: ${{ matrix.args }}

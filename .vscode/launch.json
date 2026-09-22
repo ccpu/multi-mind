@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Breakpoints in the Rust code while Vite serves the frontend.
+      // Needs the CodeLLDB extension (vadimcn.vscode-lldb).
+      // `--no-default-features` is what tells Tauri to load `devUrl` instead
+      // of the bundled assets - normally the Tauri CLI passes it for you.
+      "name": "Tauri: debug",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--manifest-path=./apps/desktop/src-tauri/Cargo.toml",
+          "--no-default-features"
+        ]
+      },
+      "preLaunchTask": "ui:dev"
+    },
+    {
+      // The same, against the built frontend rather than the dev server.
+      "name": "Tauri: debug (built frontend)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--release",
+          "--manifest-path=./apps/desktop/src-tauri/Cargo.toml"
+        ]
+      },
+      "preLaunchTask": "ui:build"
+    },
+    {
+      // On Windows the MSVC debugger is usually the smoother option.
+      // Needs the C/C++ extension (ms-vscode.cpptools).
+      "name": "Tauri: debug (Windows, MSVC)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/desktop/src-tauri/target/debug/desktop.exe",
+      "cwd": "${workspaceFolder}/apps/desktop",
+      "preLaunchTask": "rust:build:debug"
+    }
+  ]
+}

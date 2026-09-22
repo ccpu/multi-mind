@@ -1,0 +1,28 @@
+{
+  "name": "@internal/tailwind",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./globals.css": "./globals.css"
+  },
+  "files": [
+    "globals.css"
+  ],
+  "scripts": {
+    "clean:all": "git clean -xdf .cache .turbo node_modules",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
+    "format:fix": "prettier --write . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "tailwindcss": "catalog:prod"
+  },
+  "devDependencies": {
+    "@internal/eslint-config": "workspace:*",
+    "@internal/prettier-config": "workspace:*",
+    "eslint": "catalog:dev",
+    "prettier": "catalog:dev"
+  },
+  "prettier": "@internal/prettier-config"
+}

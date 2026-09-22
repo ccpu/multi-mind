@@ -1,0 +1,33 @@
+[package]
+name = "desktop"
+version = "0.1.0"
+description = "Tauri desktop application"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+# Built by the Tauri CLI, never published to crates.io.
+publish = false
+
+[lib]
+# The desktop binary and the mobile entry point both call into this library,
+# so the app lives in lib.rs and main.rs stays a two-line shim.
+name = "desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Smaller binaries, as recommended by the Tauri app-size guide. Drop `panic`
+# and `strip` if you would rather have readable backtraces from a release build.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
