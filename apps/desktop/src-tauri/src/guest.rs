@@ -85,6 +85,10 @@ const IDLE_DELAY: Duration = Duration::from_secs(10);
 ///   iframes, into one renderer. Different sites stay in different processes:
 ///   this is process reuse *within* an origin, not across.
 /// - `--optimize-for-size` is V8 choosing memory over speed.
+///
+/// Off Windows nothing outside the tests reads this: every use is behind
+/// `#[cfg(windows)]`, and the tests below still hold it to the config.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackForwardCache --enable-low-end-device-mode --process-per-site --js-flags=--optimize-for-size";
 
 fn guest_label(website_id: &str) -> String {

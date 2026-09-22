@@ -88,6 +88,9 @@ pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResul
         };
     };
 
+    // Only the `#[cfg(windows)]` block below reassigns it, so off Windows the
+    // `mut` is dead.
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut builder = WebviewWindowBuilder::new(&app, &window_name, WebviewUrl::App(page.into()))
         .title(title)
         .inner_size(width, height)
