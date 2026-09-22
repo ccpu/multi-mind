@@ -17,6 +17,7 @@
     "format:fix": "prettier --write . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
   },
   "dependencies": {
+    "@pixpilot/vite-plugin-source-inspector": "catalog:dev",
     "@tailwindcss/vite": "catalog:dev",
     "@vitejs/plugin-react": "catalog:dev",
     "vite": "catalog:dev"

@@ -1,4 +1,5 @@
 import process from 'node:process';
+import { sourceInspectorPlugin } from '@pixpilot/vite-plugin-source-inspector';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { mergeConfig } from 'vite';
@@ -30,7 +31,10 @@ const HMR_PORT = 1421;
 export function createAppViteConfig(options = {}) {
   /** @type {import('vite').UserConfig} */
   const baseConfig = {
-    plugins: [react(), tailwindcss()],
+    // `sourceInspectorPlugin` is a dev-server-only tool: alt+shift and a click
+    // on an element opens the JSX that rendered it in VS Code. It no-ops in a
+    // build, so it never reaches a bundled window.
+    plugins: [react(), tailwindcss(), sourceInspectorPlugin()],
 
     // Vite's cleared screen would eat the Rust compiler output.
     clearScreen: false,
