@@ -1,3 +1,11 @@
+# [1.1.0](https://github.com/ccpu/multi-mind/compare/v1.0.0...v1.1.0) (2026-09-22)
+
+
+### Features
+
+* **main-window:** add support for opening new windows ([4dc6c06](https://github.com/ccpu/multi-mind/commit/4dc6c0635cb3dfe99feb5d475dbfbcdabf1cc04c))
+* **vite:** add @pixpilot/vite-plugin-source-inspector dependency ([4670807](https://github.com/ccpu/multi-mind/commit/467080716bf13f19ec1236e0a89f2c5fe8516137))
+
 # 1.0.0 (2026-09-22)
 
 
