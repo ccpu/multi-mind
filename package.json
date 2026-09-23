@@ -1,6 +1,6 @@
 {
   "name": "multi-mind",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "description": "Multi Mind — one prompt, many AI chat sites side by side. A Tauri desktop app.",

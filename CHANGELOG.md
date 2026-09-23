@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/ccpu/multi-mind/compare/v1.2.0...v1.3.0) (2026-09-23)
+
+
+### Features
+
+* **guest:** enhance popup handling and introduce script support ([9e1273c](https://github.com/ccpu/multi-mind/commit/9e1273c620aec4485ca7b0a27a2af2f981e30621))
+
 # [1.2.0](https://github.com/ccpu/multi-mind/compare/v1.1.0...v1.2.0) (2026-09-23)
 
 
