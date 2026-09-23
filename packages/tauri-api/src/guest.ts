@@ -99,12 +99,15 @@ export async function guestOpenDevtools(websiteId: string): Promise<void> {
 }
 
 /**
- * Opens the in-app window a sign-in flow asks for — the one WebView2 would
- * have given it — sharing the profile so the session it authorises is the one
- * the panes are signed in to.
+ * Opens the in-app window a guest asked for — the one WebView2 would have
+ * given it — sharing the profile so the session a sign-in authorises is the
+ * one the panes are signed in to.
+ *
+ * The window gets no bridge and no capability, so `scripts` are only what the
+ * page does for itself; `createPopupScripts` is what belongs here.
  */
-export async function guestOpenPopup(url: string): Promise<void> {
-  return invoke<void>('guest_open_popup', { url });
+export async function guestOpenPopup(url: string, scripts: string[]): Promise<void> {
+  return invoke<void>('guest_open_popup', { url, scripts });
 }
 
 /**

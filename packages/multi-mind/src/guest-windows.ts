@@ -2,66 +2,39 @@
  * What an embedded site is allowed to open, and where.
  *
  * WebView2 gave the WinForms build one answer for everything: `window.open`
- * made a real window. That kept sign-in working, but it also meant a citation
- * in a chat answer opened in a bare app window with no address bar, no history
- * and no bookmarks — which is not what "open link" means to anyone.
+ * made a real window, inside the app, on the app's profile. That is what kept
+ * sign-in working, because a sign-in finished in a browser the app cannot see
+ * authorises a session the panes never get.
  *
- * The line this needs is the one Chromium draws in the disposition it reports:
- * a `window.open` given a size is a popup, and a link the user clicked is a
- * tab. Sign-in flows are the first, so they stay in the app; a link is the
- * second, and belongs in the browser the user actually chose.
+ * The Tauri port briefly tried to be cleverer — sized popups stayed in, plain
+ * links were handed to the system browser, the way Chromium's own disposition
+ * splits them. Sites do not cooperate: a "Continue with Google" is as likely
+ * to be a bare `window.open` or an `<a target="_blank">` as a sized one, so
+ * the split sent sign-ins to the user's browser, where they are useless.
  *
- * A Tauri webview reports no disposition of its own, so the guest script in
- * {@link createGuestWindowScript} works one out the same way Chromium does —
- * from whether `window.open` was given window features — and the host decides
- * from that, exactly as the Electron port decided from Chromium's answer.
+ * So the WinForms answer is back. Everything opens in the app, sharing the
+ * guest profile, and the right-click menu's "Open Link in Browser" is the one
+ * deliberate way out to the system browser.
  */
 
-/** The dispositions Chromium distinguishes, as the guest script reports them. */
-export type GuestWindowDisposition =
-  | 'background-tab'
-  | 'default'
-  | 'foreground-tab'
-  | 'new-window'
-  | 'other'
-  | 'save-to-disk';
-
 export type GuestWindowDecision =
-  /** Hand it to the system browser and open nothing here. */
-  | 'external'
-  /** Open the in-app window WebView2 would have, for sign-in and the like. */
+  /** Open it here, in a window on the guest profile. */
   | 'popup'
-  /** Neither: not something the shell or a window should be given. */
+  /** Not something a window should be given. */
   | 'block';
 
 export interface GuestWindowRequest {
   readonly url: string;
-  readonly disposition: GuestWindowDisposition;
 }
 
 /**
- * Sized popups, plus the bucket used when the kind cannot be told. Keeping an
- * unknown disposition in the app is the cautious way round: a sign-in that
- * opens in the wrong place cannot be finished, while a link that opens in the
- * wrong place can still be right-clicked out to the browser.
- */
-const IN_APP_DISPOSITIONS = new Set<GuestWindowDisposition>(['new-window', 'other']);
-
-/**
- * Only web links are worth handing to the system browser; a `javascript:` or
- * `data:` target would either do nothing or hand the shell something odd.
+ * Only web links are worth opening; a `javascript:` or `data:` target would
+ * either do nothing or hand a window something odd.
  */
 function isWebUrl(url: string): boolean {
   return /^https?:\/\//iu.test(url);
 }
 
-export function decideGuestWindow({
-  url,
-  disposition,
-}: GuestWindowRequest): GuestWindowDecision {
-  if (!isWebUrl(url)) {
-    return 'block';
-  }
-
-  return IN_APP_DISPOSITIONS.has(disposition) ? 'popup' : 'external';
+export function decideGuestWindow({ url }: GuestWindowRequest): GuestWindowDecision {
+  return isWebUrl(url) ? 'popup' : 'block';
 }

@@ -91,14 +91,12 @@ export function createCtrlEnterReporterScript({ bridgeKey }: GuestGlobals): stri
 }
 
 /**
- * Hands anything the page wants to open in another window to the host, with
- * the disposition Chromium would have reported for it.
+ * Hands anything the page wants to open in another window to the host.
  *
  * Electron answered this in the main process, out of `setWindowOpenHandler`.
- * A Tauri webview has no such hook — a `window.open` simply opens nothing —
- * so the classification the host's {@link decideGuestWindow} needs is worked
- * out here instead, from the two things Chromium itself distinguishes: a
- * `window.open` given window features is a popup, a plain target is a tab.
+ * A Tauri webview has no such hook — a `window.open` simply opens nothing, and
+ * a `target="_blank"` click goes nowhere — so both are reported instead, and
+ * {@link decideGuestWindow} decides what the window does about them.
  */
 export function createGuestWindowScript({ bridgeKey }: GuestGlobals): string {
   const bridge = JSON.stringify(bridgeKey);
@@ -106,25 +104,25 @@ export function createGuestWindowScript({ bridgeKey }: GuestGlobals): string {
 
   return `
   (function () {
-    function request(url, disposition) {
+    function request(url) {
       if (!url) {
         return;
       }
 
       window[${bridge}].postMessage(
-        ${prefix} + JSON.stringify({ url: new URL(url, location.href).href, disposition: disposition })
+        ${prefix} + JSON.stringify({ url: new URL(url, location.href).href })
       );
     }
 
     var nativeOpen = window.open;
 
-    window.open = function (url, target, features) {
-      // Sign-in flows ask for a sized window; everything else is a link the
-      // user would expect their own browser to answer.
-      request(url, features ? 'new-window' : 'foreground-tab');
+    window.open = function (url) {
+      request(url);
 
       // Nothing is opened here, but a caller that reads the return value has
-      // to get an object back rather than a crash.
+      // to get an answer back rather than a crash. A sign-in flow that polls
+      // the handle it was given sees a window it cannot reach, which is what
+      // it would see for a blocked popup — and what it did before this.
       return null;
     };
     window.open.toString = function () { return nativeOpen.toString(); };
@@ -141,7 +139,58 @@ export function createGuestWindowScript({ bridgeKey }: GuestGlobals): string {
         }
 
         event.preventDefault();
-        request(anchor.href, 'foreground-tab');
+        request(anchor.href);
+      },
+      true
+    );
+  })();
+`;
+}
+
+/**
+ * What runs inside one of those windows once it is open.
+ *
+ * A popup is a plain Tauri window with no bridge and no capability, so it
+ * cannot ask the app for anything — and, like a pane, it opens nothing of its
+ * own accord. A sign-in that steps through a second `window.open`, or a page
+ * whose every link is `target="_blank"`, would dead-end in a window with no
+ * address bar to type its way out of.
+ *
+ * Needing no host for that is the point: a popup is already the window the
+ * link asked for, so it answers both by navigating itself.
+ */
+export function createPopupWindowScript(): string {
+  return `
+  (function () {
+    function go(url) {
+      if (url) {
+        location.href = new URL(url, location.href).href;
+      }
+    }
+
+    var nativeOpen = window.open;
+
+    window.open = function (url) {
+      go(url);
+
+      // The caller asked for a window and got this one.
+      return window;
+    };
+    window.open.toString = function () { return nativeOpen.toString(); };
+
+    document.addEventListener(
+      'click',
+      function (event) {
+        var anchor = event.target instanceof Element
+          ? event.target.closest('a[href]')
+          : null;
+
+        if (anchor === null || anchor.target !== '_blank') {
+          return;
+        }
+
+        event.preventDefault();
+        go(anchor.href);
       },
       true
     );
@@ -272,6 +321,17 @@ export function createGuestScripts(
     createGuestWindowScript(globals),
     createContextMenuReporterScript(globals),
   ].map(asVoidScript);
+}
+
+/**
+ * The scripts a popup window opened for a guest is built with.
+ *
+ * A popup is on the same profile as the panes but is nobody's guest: it has no
+ * bridge to report to and no site whose selectors would mean anything, so the
+ * only thing it needs is to stop being a dead end.
+ */
+export function createPopupScripts(): string[] {
+  return [createPopupWindowScript()].map(asVoidScript);
 }
 
 /** Port of the `script2` template in `WebViewManager.RunPropt`. */

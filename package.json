@@ -72,6 +72,8 @@
     "@commitlint/config-conventional": "^21.2.2",
     "@internal/prettier-config": "workspace:*",
     "@pixpilot/dev-config": "catalog:dev",
+    "@pixpilot/tauri-updater-manifest": "^0.1.0",
+    "@pixpilot/tauri-version": "^0.1.0",
     "@pixpilot/workspace-package-generator": "^2.1.2",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^7.1.0",

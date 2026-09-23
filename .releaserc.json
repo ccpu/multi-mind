@@ -13,7 +13,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "node scripts/stamp-tauri-version.mjs ${nextRelease.version}",
+        "prepareCmd": "pnpm exec tauri-version ${nextRelease.version} --tauri-dir apps/desktop/src-tauri --json apps/desktop/package.json",
         "publishCmd": "echo released=true >> \"$GITHUB_OUTPUT\"; echo version=${nextRelease.version} >> \"$GITHUB_OUTPUT\"; echo tag=${nextRelease.gitTag} >> \"$GITHUB_OUTPUT\""
       }
     ],
@@ -24,6 +24,7 @@
           "package.json",
           "apps/desktop/package.json",
           "apps/desktop/src-tauri/Cargo.toml",
+          "apps/desktop/src-tauri/Cargo.lock",
           "apps/desktop/src-tauri/tauri.conf.json",
           "CHANGELOG.md"
         ],

@@ -45,11 +45,11 @@ jobs:
       # latest.json has to name the files the release actually receives.
       - name: Build the updater manifest
         run: >-
-          node scripts/build-updater-manifest.mjs
-          release-artifacts
-          "${{ inputs.app-version }}"
-          "${{ inputs.tag-name }}"
-          "${{ github.repository }}"
+          pnpm exec tauri-updater-manifest release-artifacts
+          --version "${{ inputs.app-version }}"
+          --tag "${{ inputs.tag-name }}"
+          --repository "${{ github.repository }}"
+          --product-name "Multi Mind"
 
       - name: Attach installers to the release
         run: |

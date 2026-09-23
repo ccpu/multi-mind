@@ -1,7 +1,11 @@
 import type { GuestGlobals } from '../src/messages';
 import { describe, expect, it } from 'vitest';
 import { createGuestGlobals } from '../src/messages';
-import { createGuestScripts, createRunPromptScript } from '../src/scripts';
+import {
+  createGuestScripts,
+  createPopupScripts,
+  createRunPromptScript,
+} from '../src/scripts';
 import { DEFAULT_WEBSITES } from '../src/websites';
 
 const claude = DEFAULT_WEBSITES.find((website) => website.name === 'claude')!;
@@ -59,14 +63,16 @@ describe('createGuestScripts', () => {
   });
 
   /*
-   * Electron answered `window.open` in its main process. Tauri has no such
-   * hook, so the classification `decideGuestWindow` reads has to be worked out
-   * in the page: a sized window is a sign-in popup, a bare target is a link.
+   * Electron answered `window.open` in its main process and Tauri has no such
+   * hook, so both the ways a page asks for a window are reported instead --
+   * and a `target="_blank"` click has to be one of them, because that is how
+   * as many sign-ins start as start with `window.open`.
    */
-  it('classifies a window.open by whether it was given window features', () => {
+  it('reports both ways a page asks for another window', () => {
     const [, , , windowOpener] = createGuestScripts(claude, globals);
 
-    expect(windowOpener).toContain("features ? 'new-window' : 'foreground-tab'");
+    expect(windowOpener).toContain('window.open = function');
+    expect(windowOpener).toContain("anchor.target !== '_blank'");
     expect(windowOpener).toContain('window["_bridge"].postMessage');
   });
 
@@ -77,6 +83,25 @@ describe('createGuestScripts', () => {
       expect(menuReporter).toContain(field);
     }
     expect(menuReporter).toContain('"__menu__"');
+  });
+});
+
+describe('createPopupScripts', () => {
+  /*
+   * A popup has no bridge to report to, so a link it cannot answer itself is a
+   * dead end: the window has no address bar to type a way out of.
+   */
+  it('answers a window a popup opens by navigating the popup', () => {
+    const [popupScript] = createPopupScripts();
+
+    expect(popupScript).toContain('location.href');
+    expect(popupScript).not.toContain('postMessage');
+  });
+
+  it('completes with undefined', () => {
+    for (const script of createPopupScripts()) {
+      expect(script.trimEnd().endsWith('undefined;')).toBe(true);
+    }
   });
 });
 

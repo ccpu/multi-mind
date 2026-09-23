@@ -85,7 +85,7 @@ jobs:
       # needs its version stamped before Tauri names the installers.
       - name: Stamp the app version
         if: inputs.app-version != ''
-        run: node scripts/stamp-tauri-version.mjs "${{ inputs.app-version }}"
+        run: pnpm exec tauri-version "${{ inputs.app-version }}" --tauri-dir apps/desktop/src-tauri --json apps/desktop/package.json
 
       # Signed here, not at publish time: the updater verifies each artifact
       # against the public key in tauri.conf.json, and only the bundler can

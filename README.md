@@ -1,21 +1,39 @@
-# tauri-template
+# Multi Mind
 
-A [Tauri v2](https://v2.tauri.app) desktop application template: a pnpm + Turborepo
-monorepo with a React, TypeScript and Tailwind CSS frontend, a Rust backend, and
-the lint / format / type-check / test / release pipeline already wired up.
+One prompt box driving several AI chat sites side by side. Type once, send to
+Claude, ChatGPT, Gemini, DeepSeek and the rest at the same time, and read the
+answers next to each other.
 
-> ⚠️ **Opinionated template.** It follows our internal standards. Fork it, strip
-> what you do not need, and make it yours.
+A [Tauri v2](https://v2.tauri.app) desktop app — Rust core, OS webview, React
+frontend — in a pnpm + Turborepo monorepo.
 
-## ✨ What is in the box
+## What it does
 
-| Area      | Choice                                                            |
-| --------- | ----------------------------------------------------------------- |
-| Shell     | Tauri v2 — a Rust core plus the OS webview, no bundled browser     |
-| Frontend  | React 19, Vite, TypeScript, Tailwind CSS v4                        |
-| Workspace | pnpm workspaces with catalogs, Turborepo                           |
-| Quality   | ESLint, Prettier (with Tailwind class sorting), Vitest, clippy, rustfmt |
-| CI/CD     | GitHub Actions: checks on every PR, installers for macOS, Windows and Linux on a tag |
+- **One prompt, many sites.** Each site runs in its own embedded webview and is
+  driven by a script that fills its input and clicks its send button.
+- **Your own logins.** Sites are used signed in as you; there are no API keys
+  and no server in the middle.
+- **An editable site catalogue.** Seven sites ship configured. Add your own,
+  reorder them, or fix a selector when a site is redesigned — sites set to
+  follow their defaults pick up shipped fixes automatically.
+- **Prompt presets.** Saved wrappers that a typed prompt drops into, with a
+  markdown or plain editor and prompt history.
+- **A settings window** for the prompt box, the site list, where `settings.json`
+  lives, and automatic updates.
+
+| Site       | Enabled by default |
+| ---------- | ------------------ |
+| Claude     | yes                |
+| ChatGPT    | yes                |
+| Gemini     | yes                |
+| DeepSeek   | yes                |
+| Grok       | no                 |
+| Perplexity | no                 |
+| Qwen       | no                 |
+
+Installers for macOS, Windows and Linux are attached to each
+[release](https://github.com/ccpu/multi-mind/releases), and the app updates
+itself unless you turn that off.
 
 ## 🚀 Getting started
 
@@ -26,31 +44,25 @@ platform's build tools (WebView2 on Windows, Xcode command line tools on macOS,
 
 ```sh
 pnpm install
-pnpm run setup   # one-time: renames the template to your project
-pnpm dev         # the desktop app
+pnpm dev     # the desktop app
 ```
-
-`pnpm run setup` is a one-time step. Until it has run, `pnpm install` prints a
-reminder and `git commit` is blocked. It finishes by deleting the `setup/`
-folder, so the gate removes itself. It is skipped in CI, in this template repo
-itself, and with `SKIP_SETUP_CHECK=1`.
 
 ### Everyday commands
 
-| Command            | What it does                                                        |
-| ------------------ | ------------------------------------------------------------------- |
-| `pnpm dev`         | Runs the app: Vite dev server plus the Rust backend, both hot-reloading |
-| `pnpm dev:web`     | Frontend alone in a browser — no Rust toolchain needed              |
-| `pnpm build`       | Builds the frontend bundle                                          |
-| `pnpm bundle`      | Builds installers for the current platform                          |
-| `pnpm test`        | Vitest across the workspace                                         |
-| `pnpm typecheck`   | `tsc --noEmit` across the workspace                                 |
-| `pnpm lint` / `pnpm lint:fix` | ESLint                                                   |
-| `pnpm format` / `pnpm format:fix` | Prettier                                             |
-| `pnpm rust:fmt` / `pnpm rust:lint` / `pnpm rust:test` | rustfmt, clippy, cargo test      |
-| `pnpm fix:all`     | Format, lint and type-check in one go                               |
-| `pnpm gen:icons`   | Regenerates the icon set from `apps/desktop/public/logo.svg`          |
-| `pnpm gen:package` | Scaffolds a new workspace package                                   |
+| Command                                               | What it does                                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm dev`                                            | Runs the app: Vite dev server plus the Rust backend, both hot-reloading |
+| `pnpm dev:web`                                        | Frontend alone in a browser — no Rust toolchain needed                  |
+| `pnpm build`                                          | Builds the frontend bundle                                              |
+| `pnpm bundle`                                         | Builds installers for the current platform                              |
+| `pnpm test`                                           | Vitest across the workspace                                             |
+| `pnpm typecheck`                                      | `tsc --noEmit` across the workspace                                     |
+| `pnpm lint` / `pnpm lint:fix`                         | ESLint                                                                  |
+| `pnpm format` / `pnpm format:fix`                     | Prettier                                                                |
+| `pnpm rust:fmt` / `pnpm rust:lint` / `pnpm rust:test` | rustfmt, clippy, cargo test                                             |
+| `pnpm fix:all`                                        | Format, lint and type-check in one go                                   |
+| `pnpm gen:icons`                                      | Regenerates the icon set from `apps/desktop/public/logo.svg`            |
+| `pnpm gen:package`                                    | Scaffolds a new workspace package                                       |
 
 Anything under `apps/` or `packages/` can also be targeted directly:
 `pnpm --filter @internal/ui test`.
@@ -60,49 +72,36 @@ Anything under `apps/` or `packages/` can also be targeted directly:
 ```
 apps/
 └── desktop/            # the application
-    ├── src/            # React frontend
+    ├── src/            # React frontend: windows/main, windows/settings
     └── src-tauri/      # Rust backend, tauri.conf.json, capabilities, icons
 packages/
+├── multi-mind/         # settings, sites, prompts, history, guest scripts
+├── configs/            # the few values that describe the app itself
 ├── tauri-api/          # typed wrappers around the Rust commands
 ├── ui/                 # shared React components and the theme
 └── utils/              # framework-free helpers
 tooling/
-├── eslint/ prettier/ typescript/ vitest/   # shared configs
+├── eslint/ prettier/ typescript/ vitest/ tsdown/   # shared configs
 ├── tailwind/           # globals.css: the theme, imported once by the app
 └── vite/               # the Tauri-aware Vite config factory
 ```
 
+[packages/multi-mind](packages/multi-mind/README.md) holds the behaviour and is
+where it is tested — it imports neither Tauri nor React. Everything else is the
+shell around it.
+
 Every package is private and consumed as TypeScript source, so there is no build
 step between them — change a component and the app hot-reloads.
 
-Read [apps/desktop/README.md](apps/desktop/README.md) for the app itself:
-adding a command, a plugin or a second window.
-
-## 🧭 Coming from Electron?
-
-Tauri splits the same problem differently, and the template's layout follows its
-split rather than Electron's.
-
-| Electron                                | Tauri                                                             |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| Main process (Node.js)                  | Rust core — `apps/desktop/src-tauri/src`                          |
-| Renderer process                        | An OS webview loading the Vite build — `apps/desktop/src`         |
-| Preload script + `contextBridge`        | Nothing. The frontend has no system access unless a command or a permission grants it |
-| `ipcMain.handle` / `ipcRenderer.invoke` | `#[tauri::command]` + `invoke`, wrapped in `@internal/tauri-api`   |
-| `nodeIntegration`, `sandbox`, allowlists | `capabilities/*.json` — per-window permissions, checked in Rust    |
-| electron-builder                        | The Tauri bundler (`pnpm bundle`)                                 |
-| ~100 MB installer with a bundled Chromium | A few MB against the system webview                             |
-
-The practical difference: there is no privileged JavaScript. Anything the UI
-needs from the system is a Rust function you chose to expose, which is why the
-`packages/tauri-api` boundary exists and why nothing else calls `invoke`.
+Read [apps/desktop/README.md](apps/desktop/README.md) for the app itself: adding
+a command, a plugin or a second window.
 
 ## 🎨 Styling
 
 Tailwind v4 is configured in CSS, not in a config file. The single entry point is
 [tooling/tailwind/globals.css](tooling/tailwind/globals.css): it defines the
 theme tokens, registers the workspace packages as sources, and is imported once
-in `apps/desktop/src/main.tsx`.
+per window entry point.
 
 Colors are CSS custom properties that the `.dark` class redefines, so components
 use `bg-card` or `text-muted-foreground` and follow the theme automatically —
@@ -111,12 +110,13 @@ light / dark / system choice.
 
 ## 🤖 CI and releases
 
-| Workflow                                              | Trigger                       | Does                                                    |
-| ----------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
-| [ci.yml](.github/workflows/ci.yml)                     | push, pull request            | Lint, format, types and tests, plus rustfmt, clippy and `cargo test` |
-| [build.yml](.github/workflows/build.yml)               | manual, or called by a release | Builds installers on macOS (both architectures), Windows and Linux |
-| [release.yml](.github/workflows/release.yml)           | push to `main`                 | Uses conventional commits to version, tag and publish a GitHub release |
-| [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | push, PR, weekly         | CodeQL scan of the TypeScript sources                    |
+| Workflow                                                     | Trigger                     | Does                                                                          |
+| ------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------- |
+| [ci.yml](.github/workflows/ci.yml)                           | push, pull request          | Lint, format, types and tests, plus rustfmt, clippy and `cargo test`          |
+| [release.yml](.github/workflows/release.yml)                 | push to `main`, manual      | Uses conventional commits to version, tag and publish a GitHub release        |
+| [build.yml](.github/workflows/build.yml)                     | called by a release, manual | Builds installers on macOS (both architectures), Windows and Linux            |
+| [deploy.yml](.github/workflows/deploy.yml)                   | called by a release         | Attaches the installers to the release and writes the updater's `latest.json` |
+| [codeql-analysis.yml](.github/workflows/codeql-analysis.yml) | push, PR, weekly            | CodeQL scan of the TypeScript sources                                         |
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) on `main`.
 Pushing a `fix:` commit creates a patch release; `feat:` creates a minor
@@ -133,12 +133,10 @@ git commit -m "feat: add a new AI provider"
 git push origin main
 ```
 
-The release is published automatically once its installers finish building.
-Nothing is signed or notarised out of
-the box: see the Tauri guides for
-[code signing](https://v2.tauri.app/distribute/sign/) and the
-[updater](https://v2.tauri.app/plugin/updater/), both of which come down to
-adding secrets to `build.yml`.
+Updater artifacts are signed when `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set as repository secrets. Installers
+themselves are not code-signed or notarised — see the Tauri
+[code signing guide](https://v2.tauri.app/distribute/sign/) for that.
 
 ## 🤝 Contributing
 
@@ -146,6 +144,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📄 License
 
-MIT. The repository ships without a `LICENSE` file on purpose — add one with
-your own copyright line, and keep `license` in `apps/desktop/src-tauri/Cargo.toml`
-in step with it.
+MIT.

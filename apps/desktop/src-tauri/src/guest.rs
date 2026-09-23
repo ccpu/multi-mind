@@ -889,17 +889,20 @@ pub async fn guest_open_devtools(
     Ok(())
 }
 
-/// Opens the in-app window a sign-in flow asks for.
+/// Opens the in-app window a guest asked for — a sign-in flow, a citation, any
+/// `window.open` or `target="_blank"` a site hands over.
 ///
-/// It shares the profile, so the session it authorises is the one every pane
-/// in every window is signed in to — which is the whole reason it is not
-/// simply handed to the system browser. It gets no capability of its own, so
-/// the page in it can call nothing.
+/// It shares the profile, so the session a sign-in authorises is the one every
+/// pane in every window is signed in to, which is the whole reason none of
+/// this is handed to the system browser. It gets no capability of its own, so
+/// the page in it can call nothing; `scripts` are therefore whatever the
+/// window wants the page to do for itself, with no bridge in front of them.
 #[tauri::command]
 pub async fn guest_open_popup(
     app: AppHandle,
     host: State<'_, GuestHost>,
     url: String,
+    scripts: Vec<String>,
 ) -> Result<(), String> {
     let parsed = Url::parse(&url).map_err(|error| format!("\"{url}\" is not a URL: {error}"))?;
 
@@ -909,7 +912,15 @@ pub async fn guest_open_popup(
         .title("Multi Mind")
         .inner_size(600.0, 720.0)
         .data_directory(host.profile_directory.clone())
+        .zoom_hotkeys_enabled(true)
         .center();
+
+    if !scripts.is_empty() {
+        builder = builder.initialization_script(scripts.join(
+            "
+",
+        ));
+    }
 
     if let Some(user_agent) = &host.user_agent {
         builder = builder.user_agent(user_agent);

@@ -150,6 +150,12 @@ importers:
       '@pixpilot/dev-config':
         specifier: catalog:dev
         version: 3.22.1
+      '@pixpilot/tauri-updater-manifest':
+        specifier: ^0.1.0
+        version: 0.1.0
+      '@pixpilot/tauri-version':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@pixpilot/workspace-package-generator':
         specifier: ^2.1.2
         version: 2.1.2
@@ -1790,6 +1796,14 @@ packages:
 
   '@pixpilot/string@3.0.1':
     resolution: {integrity: sha512-817A0vpbZWPKvR04ZbbwnfEJ+6TBl6ay8XJm6yqpn6aV8Inw7mBMD0i10KfNxZ2gfrMnRb+/zJ+JXpLFfILqdQ==}
+
+  '@pixpilot/tauri-updater-manifest@0.1.0':
+    resolution: {integrity: sha512-IkLuNqMkNI+TzI3TCDjelF692Aof+1yjW6e9crWXOvn49i1KCK6kgW4WO5a0DCsBiu9zw8qbWpveq6QQKHlY3w==}
+    hasBin: true
+
+  '@pixpilot/tauri-version@0.1.0':
+    resolution: {integrity: sha512-bJEow9zqZZI2LQ19azfpR5R1JePqoVl5nTN9D1Bk5tipZLMQ8qYHBTLVyfaA02rzp2w5SeqhVLkQ5E4eSrFZVg==}
+    hasBin: true
 
   '@pixpilot/tsdown-config@0.6.0':
     resolution: {integrity: sha512-6TUycB8IKtadAQs2khSXpsGIL+psacy5Z5gAITNeRcflTiQ948z467dV95UeqGUyxcMtO47iGnRkcNp4C+mmlQ==}
@@ -8431,6 +8445,10 @@ snapshots:
   '@pixpilot/string@3.0.1':
     dependencies:
       change-case: 5.4.4
+
+  '@pixpilot/tauri-updater-manifest@0.1.0': {}
+
+  '@pixpilot/tauri-version@0.1.0': {}
 
   '@pixpilot/tsdown-config@0.6.0(tsdown@0.23.0(tsx@4.23.13)(typescript@6.0.3)(unrun@0.3.0(synckit@0.11.13)))':
     dependencies:
