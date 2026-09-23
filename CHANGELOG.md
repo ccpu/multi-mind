@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/ccpu/multi-mind/compare/v1.1.0...v1.2.0) (2026-09-23)
+
+
+### Features
+
+* **build:** add signing support for updater artifacts ([dca6bfd](https://github.com/ccpu/multi-mind/commit/dca6bfd6d561b7484f0016c2f686c8b454afc6ce))
+
 # [1.1.0](https://github.com/ccpu/multi-mind/compare/v1.0.0...v1.1.0) (2026-09-22)
 
 
