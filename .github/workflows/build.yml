@@ -13,6 +13,13 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        description: Minisign private key the updater artifacts are signed with.
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        description: Password for that key, empty when it was generated without one.
+        required: false
 
 defaults:
   run:
@@ -80,8 +87,14 @@ jobs:
         if: inputs.app-version != ''
         run: node scripts/stamp-tauri-version.mjs "${{ inputs.app-version }}"
 
+      # Signed here, not at publish time: the updater verifies each artifact
+      # against the public key in tauri.conf.json, and only the bundler can
+      # produce the .sig files that verification needs.
       - name: Build installers
         run: pnpm --filter @app/desktop exec tauri build ${{ matrix.args }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Upload installers
         uses: actions/upload-artifact@v4

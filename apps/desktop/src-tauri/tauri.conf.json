@@ -43,14 +43,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/ccpu/multi-mind/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFERTU3QUJCMDc4QjVERDYKUldUV1hZc0h1M3JsSGZHQVJ2SjNCUitoTmJlaTRnWFB5UDY5Q3NpMkxXc1BYQjNhakExNHA2bmUK"
     }
   }
 }

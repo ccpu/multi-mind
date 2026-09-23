@@ -1,4 +1,5 @@
-# Attaches the build artifacts to the GitHub release semantic-release created.
+# Attaches the build artifacts to the GitHub release semantic-release created,
+# and writes the latest.json the updater reads.
 
 name: Deploy
 
@@ -7,6 +8,10 @@ on:
     inputs:
       tag-name:
         description: Existing release tag to receive the installers.
+        required: true
+        type: string
+      app-version:
+        description: Version the updater manifest announces.
         required: true
         type: string
 
@@ -21,17 +26,36 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup project
+        uses: pixpilot/github-actions/setup-pnpm-project@v1
+
+      # Each build keeps its own directory. The two macOS builds name their
+      # tarball identically, and merging them into one directory would drop an
+      # architecture before anything noticed.
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
           pattern: tauri-*
           path: release-artifacts
-          merge-multiple: true
+
+      # Runs before the upload because it renames those macOS tarballs, and
+      # latest.json has to name the files the release actually receives.
+      - name: Build the updater manifest
+        run: >-
+          node scripts/build-updater-manifest.mjs
+          release-artifacts
+          "${{ inputs.app-version }}"
+          "${{ inputs.tag-name }}"
+          "${{ github.repository }}"
 
       - name: Attach installers to the release
         run: |
           mapfile -d '' files < <(
             find release-artifacts -type f \( \
+              -name 'latest.json' -o \
               -name '*.AppImage' -o -name '*.AppImage.sig' -o \
               -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' -o \
               -name '*.deb' -o -name '*.deb.sig' -o \

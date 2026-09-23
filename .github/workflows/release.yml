@@ -65,6 +65,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       app-version: ${{ needs.release.outputs.version }}
+    # A called workflow inherits nothing, and an unsigned installer is one the
+    # updater will refuse to install.
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
   publish:
     name: Attach installers to the release
@@ -77,3 +82,4 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       tag-name: ${{ needs.release.outputs.tag }}
+      app-version: ${{ needs.release.outputs.version }}
