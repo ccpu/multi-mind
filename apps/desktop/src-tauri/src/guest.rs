@@ -106,6 +106,7 @@ const DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS: u64 = 10;
 /// - `--optimize-for-size` is V8 choosing memory over speed.
 ///
 /// Off Windows every use is behind `#[cfg(windows)]`.
+#[cfg(windows)]
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackForwardCache --enable-low-end-device-mode --process-per-site --js-flags=--optimize-for-size";
 
 /// The normal browser budget. The features wry disables by default must stay
@@ -1412,6 +1413,7 @@ mod tests {
      * renderer may reach -- or that lets two sites share one -- is not, and
      * the saving would never be worth it.
      */
+    #[cfg(windows)]
     #[test]
     fn the_browser_arguments_leave_the_sandbox_alone() {
         for forbidden in [
@@ -1442,6 +1444,7 @@ mod tests {
      * A second window is only cheap because the same site lands in the same
      * renderer whichever window it is drawn in.
      */
+    #[cfg(windows)]
     #[test]
     fn the_browser_arguments_share_a_renderer_between_windows() {
         assert!(BROWSER_ARGS.contains("--process-per-site"));
