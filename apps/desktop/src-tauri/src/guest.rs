@@ -168,30 +168,91 @@ impl MemoryTargetPolicy {
 /// Browser arguments are fixed for the lifetime of the shared WebView2
 /// profile, so Settings applies this choice the next time the app starts.
 #[cfg(windows)]
-pub(crate) struct BrowserArguments(&'static str);
+#[derive(Clone, Copy)]
+struct BrowserMemorySettings {
+    browser_memory_saving: bool,
+    disable_back_forward_cache: bool,
+    enable_low_end_device_mode: bool,
+    process_per_site: bool,
+    optimize_for_size: bool,
+}
 
 #[cfg(windows)]
-impl BrowserArguments {
-    pub(crate) fn from_settings(settings: &Value) -> Self {
-        let memory_saving = settings
-            .get("browserMemorySaving")
-            .and_then(Value::as_bool)
-            .unwrap_or(true);
-
-        Self(if memory_saving {
-            BROWSER_ARGS
-        } else {
-            STANDARD_BROWSER_ARGS
-        })
-    }
-
-    fn value(&self) -> &'static str {
-        self.0
+impl BrowserMemorySettings {
+    fn from_settings(settings: &Value) -> Self {
+        Self {
+            browser_memory_saving: settings
+                .get("browserMemorySaving")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            disable_back_forward_cache: settings
+                .get("disableBackForwardCache")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            enable_low_end_device_mode: settings
+                .get("enableLowEndDeviceMode")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            process_per_site: settings
+                .get("processPerSite")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            optimize_for_size: settings
+                .get("optimizeForSize")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        }
     }
 }
 
 #[cfg(windows)]
-pub(crate) fn browser_args<R: Runtime>(app: &AppHandle<R>) -> &'static str {
+pub(crate) struct BrowserArguments(String);
+
+#[cfg(windows)]
+impl BrowserArguments {
+    pub(crate) fn from_settings(settings: &Value) -> Self {
+        let memory = BrowserMemorySettings::from_settings(settings);
+
+        if !memory.browser_memory_saving {
+            return Self(STANDARD_BROWSER_ARGS.into());
+        }
+
+        if memory.disable_back_forward_cache
+            && memory.enable_low_end_device_mode
+            && memory.process_per_site
+            && memory.optimize_for_size
+        {
+            return Self(BROWSER_ARGS.into());
+        }
+
+        let mut disabled_features = "msWebOOUI,msPdfOOUI,msSmartScreenProtection".to_string();
+
+        if memory.disable_back_forward_cache {
+            disabled_features.push_str(",BackForwardCache");
+        }
+
+        let mut arguments = format!("--disable-features={disabled_features}");
+
+        if memory.enable_low_end_device_mode {
+            arguments.push_str(" --enable-low-end-device-mode");
+        }
+        if memory.process_per_site {
+            arguments.push_str(" --process-per-site");
+        }
+        if memory.optimize_for_size {
+            arguments.push_str(" --js-flags=--optimize-for-size");
+        }
+
+        Self(arguments)
+    }
+
+    fn value(&self) -> String {
+        self.0.clone()
+    }
+}
+
+#[cfg(windows)]
+pub(crate) fn browser_args<R: Runtime>(app: &AppHandle<R>) -> String {
     app.state::<BrowserArguments>().value()
 }
 
@@ -622,7 +683,8 @@ pub async fn guest_sync(
 
         #[cfg(windows)]
         {
-            builder = builder.additional_browser_args(browser_args(&app));
+            let browser_arguments = browser_args(&app);
+            builder = builder.additional_browser_args(&browser_arguments);
         }
 
         let webview = window
@@ -1030,7 +1092,8 @@ pub async fn guest_open_popup(
     // will only build it if it asks for the same arguments they did.
     #[cfg(windows)]
     {
-        builder = builder.additional_browser_args(browser_args(&app));
+        let browser_arguments = browser_args(&app);
+        builder = builder.additional_browser_args(&browser_arguments);
     }
 
     builder.build().map_err(stringify)?;
@@ -1320,6 +1383,28 @@ mod tests {
                 .value(),
             STANDARD_BROWSER_ARGS
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn every_browser_memory_flag_can_be_disabled_independently() {
+        for (setting, argument) in [
+            ("disableBackForwardCache", "BackForwardCache"),
+            ("enableLowEndDeviceMode", "--enable-low-end-device-mode"),
+            ("processPerSite", "--process-per-site"),
+            ("optimizeForSize", "--js-flags=--optimize-for-size"),
+        ] {
+            let mut settings = serde_json::Map::new();
+            settings.insert(setting.into(), Value::Bool(false));
+
+            let arguments = BrowserArguments::from_settings(&Value::Object(settings)).value();
+
+            assert!(
+                !arguments.contains(argument),
+                "{setting} should remove {argument}"
+            );
+            assert!(arguments.contains("msWebOOUI"));
+        }
     }
 
     /*

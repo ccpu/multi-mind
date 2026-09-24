@@ -111,7 +111,8 @@ pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResul
     // same browser arguments.
     #[cfg(windows)]
     {
-        builder = builder.additional_browser_args(crate::guest::browser_args(&app));
+        let browser_arguments = crate::guest::browser_args(&app);
+        builder = builder.additional_browser_args(&browser_arguments);
     }
 
     let built = builder.build();
@@ -198,7 +199,10 @@ pub fn open_main_window<R: Runtime>(
         .background_color(tauri::window::Color(0, 0, 0, 255));
 
     #[cfg(windows)]
-    let builder = builder.additional_browser_args(guest::browser_args(app));
+    let builder = {
+        let browser_arguments = guest::browser_args(app);
+        builder.additional_browser_args(&browser_arguments)
+    };
 
     let builder = match cascade_position(near) {
         Some((x, y)) => builder.position(x, y),

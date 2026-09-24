@@ -52,7 +52,7 @@ export function MemoryCard({ settings, onChange }: MemoryCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Memory</CardTitle>
+        <CardTitle>System Memory Usage</CardTitle>
         <CardDescription>
           Keep several AI chat sites open while limiting the caches they retain in the
           background.
