@@ -64,20 +64,48 @@ async fn is_allowed(app: &AppHandle) -> bool {
         .and_then(Value::as_bool)
         .unwrap_or(false);
 
-    if prompted || tauri::is_dev() {
-        return auto_update;
+    match startup_check_decision(tauri::is_dev(), prompted, auto_update) {
+        StartupCheckDecision::Check => true,
+        StartupCheckDecision::Skip => false,
+        StartupCheckDecision::Ask => {
+            let answer = ask(app).await;
+
+            // The window it was put to is the main one, and every window has to hear
+            // the answer, so it is saved the way any other edit would be.
+            let mut patch = serde_json::Map::new();
+            patch.insert("autoUpdate".into(), json!(answer));
+            patch.insert("autoUpdatePrompted".into(), json!(true));
+            store.apply(app, patch);
+
+            answer
+        }
+    }
+}
+
+enum StartupCheckDecision {
+    Check,
+    Skip,
+    Ask,
+}
+
+fn startup_check_decision(
+    is_development: bool,
+    prompted: bool,
+    auto_update: bool,
+) -> StartupCheckDecision {
+    if is_development {
+        return StartupCheckDecision::Skip;
     }
 
-    let answer = ask(app).await;
+    if prompted {
+        return if auto_update {
+            StartupCheckDecision::Check
+        } else {
+            StartupCheckDecision::Skip
+        };
+    }
 
-    // The window it was put to is the main one, and every window has to hear
-    // the answer, so it is saved the way any other edit would be.
-    let mut patch = serde_json::Map::new();
-    patch.insert("autoUpdate".into(), json!(answer));
-    patch.insert("autoUpdatePrompted".into(), json!(true));
-    store.apply(app, patch);
-
-    answer
+    StartupCheckDecision::Ask
 }
 
 async fn ask(app: &AppHandle) -> bool {
@@ -127,5 +155,42 @@ async fn offer(app: &AppHandle, update: tauri_plugin_updater::Update) {
     match update.download_and_install(|_, _| {}, || {}).await {
         Ok(()) => app.restart(),
         Err(error) => eprintln!("Failed to install the update: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{startup_check_decision, StartupCheckDecision};
+
+    #[test]
+    fn development_builds_never_check_for_updates() {
+        assert!(matches!(
+            startup_check_decision(true, true, true),
+            StartupCheckDecision::Skip
+        ));
+    }
+
+    #[test]
+    fn packaged_builds_follow_the_saved_update_preference() {
+        assert!(matches!(
+            startup_check_decision(false, true, true),
+            StartupCheckDecision::Check
+        ));
+        assert!(matches!(
+            startup_check_decision(false, true, false),
+            StartupCheckDecision::Skip
+        ));
+    }
+
+    #[test]
+    fn packaged_builds_ask_before_the_first_update_check() {
+        assert!(matches!(
+            startup_check_decision(false, false, true),
+            StartupCheckDecision::Ask
+        ));
+        assert!(matches!(
+            startup_check_decision(false, false, false),
+            StartupCheckDecision::Ask
+        ));
     }
 }
