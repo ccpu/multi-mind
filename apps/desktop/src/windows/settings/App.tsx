@@ -5,6 +5,7 @@ import {
   ThemeModeToggleButton,
   ThemeProvider,
 } from '@internal/ui';
+import { MemoryCard } from './components/MemoryCard';
 import { PromptBoxCard } from './components/PromptBoxCard';
 import { SettingsFileCard } from './components/SettingsFileCard';
 import { UpdatesCard } from './components/UpdatesCard';
@@ -35,6 +36,7 @@ function App() {
           <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-6">
             <PromptBoxCard settings={settings} onChange={update} />
             <WebsitesCard settings={settings} onChange={update} />
+            <MemoryCard settings={settings} onChange={update} />
             <UpdatesCard settings={settings} onChange={update} />
             <SettingsFileCard />
           </main>

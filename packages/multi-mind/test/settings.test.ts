@@ -207,6 +207,32 @@ describe('normalizeSettings', () => {
     expect(settings.autoUpdatePrompted).toBe(true);
   });
 
+  it('keeps the memory controls selected in the settings window', () => {
+    const settings = normalizeSettings({
+      browserMemorySaving: false,
+      disableBackForwardCache: false,
+      enableLowEndDeviceMode: false,
+      processPerSite: false,
+      optimizeForSize: false,
+      trimInactiveWebviews: false,
+      idleMemoryTrimDelaySeconds: 30,
+    });
+
+    expect(settings.browserMemorySaving).toBe(false);
+    expect(settings.disableBackForwardCache).toBe(false);
+    expect(settings.enableLowEndDeviceMode).toBe(false);
+    expect(settings.processPerSite).toBe(false);
+    expect(settings.optimizeForSize).toBe(false);
+    expect(settings.trimInactiveWebviews).toBe(false);
+    expect(settings.idleMemoryTrimDelaySeconds).toBe(30);
+  });
+
+  it('uses the memory defaults for an unsupported trim delay', () => {
+    expect(
+      normalizeSettings({ idleMemoryTrimDelaySeconds: 15 }).idleMemoryTrimDelaySeconds,
+    ).toBe(DEFAULT_SETTINGS.idleMemoryTrimDelaySeconds);
+  });
+
   it('carries a pre-catalogue settings file over, names and all', () => {
     const settings = normalizeSettings({ enabledWebsites: ['claude', 'gemini'] });
 

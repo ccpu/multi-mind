@@ -15,6 +15,13 @@ export const PROMPT_EDITOR_OPTIONS = [
   { value: 'plain', label: 'Plain text' },
 ] as const satisfies readonly { value: PromptEditorKind; label: string }[];
 
+/** Delays offered before an unfocused chat window releases its rebuildable caches. */
+export const IDLE_MEMORY_TRIM_DELAY_OPTIONS = [5, 10, 30, 60] as const;
+
+export type IdleMemoryTrimDelaySeconds = (typeof IDLE_MEMORY_TRIM_DELAY_OPTIONS)[number];
+
+const IDLE_MEMORY_TRIM_DELAY_OPTION_SET = new Set<number>(IDLE_MEMORY_TRIM_DELAY_OPTIONS);
+
 /**
  * Port of `Multi Mind/Settings.cs`. The WinForms version serialised itself to
  * `settings.xml` next to the executable; this one stores the same values as
@@ -38,6 +45,10 @@ export const PROMPT_EDITOR_OPTIONS = [
  * the app asks GitHub for a newer release on startup. `autoUpdatePrompted`
  * records that the question has been put to the user, so a packaged app asks
  * once on its first run and never again.
+ *
+ * `browserMemorySaving` is read when WebView2 starts, so it applies after a
+ * full app restart. Its individual browser flags are used only while that
+ * switch is on. The inactive-window controls are safe to change live.
  */
 export interface AppSettings {
   panelButtonSize: number;
@@ -46,6 +57,13 @@ export interface AppSettings {
   promptEditor: PromptEditorKind;
   autoUpdate: boolean;
   autoUpdatePrompted: boolean;
+  browserMemorySaving: boolean;
+  disableBackForwardCache: boolean;
+  enableLowEndDeviceMode: boolean;
+  processPerSite: boolean;
+  optimizeForSize: boolean;
+  trimInactiveWebviews: boolean;
+  idleMemoryTrimDelaySeconds: IdleMemoryTrimDelaySeconds;
   websites: WebsiteInfo[];
   activeWebsites: string[];
   prompts: PromptPreset[];
@@ -59,6 +77,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   promptEditor: 'markdown',
   autoUpdate: true,
   autoUpdatePrompted: false,
+  browserMemorySaving: true,
+  disableBackForwardCache: true,
+  enableLowEndDeviceMode: true,
+  processPerSite: true,
+  optimizeForSize: true,
+  trimInactiveWebviews: true,
+  idleMemoryTrimDelaySeconds: 10,
   websites: [...DEFAULT_WEBSITES],
   activeWebsites: [],
   prompts: [],
@@ -67,6 +92,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 function isPromptEditorKind(value: unknown): value is PromptEditorKind {
   return PROMPT_EDITOR_OPTIONS.some((option) => option.value === value);
+}
+
+function isIdleMemoryTrimDelaySeconds(
+  value: unknown,
+): value is IdleMemoryTrimDelaySeconds {
+  return typeof value === 'number' && IDLE_MEMORY_TRIM_DELAY_OPTION_SET.has(value);
 }
 
 function asStringArray(value: unknown): string[] | null {
@@ -105,6 +136,35 @@ export function normalizeSettings(value: unknown): AppSettings {
       typeof source.autoUpdatePrompted === 'boolean'
         ? source.autoUpdatePrompted
         : DEFAULT_SETTINGS.autoUpdatePrompted,
+    browserMemorySaving:
+      typeof source.browserMemorySaving === 'boolean'
+        ? source.browserMemorySaving
+        : DEFAULT_SETTINGS.browserMemorySaving,
+    disableBackForwardCache:
+      typeof source.disableBackForwardCache === 'boolean'
+        ? source.disableBackForwardCache
+        : DEFAULT_SETTINGS.disableBackForwardCache,
+    enableLowEndDeviceMode:
+      typeof source.enableLowEndDeviceMode === 'boolean'
+        ? source.enableLowEndDeviceMode
+        : DEFAULT_SETTINGS.enableLowEndDeviceMode,
+    processPerSite:
+      typeof source.processPerSite === 'boolean'
+        ? source.processPerSite
+        : DEFAULT_SETTINGS.processPerSite,
+    optimizeForSize:
+      typeof source.optimizeForSize === 'boolean'
+        ? source.optimizeForSize
+        : DEFAULT_SETTINGS.optimizeForSize,
+    trimInactiveWebviews:
+      typeof source.trimInactiveWebviews === 'boolean'
+        ? source.trimInactiveWebviews
+        : DEFAULT_SETTINGS.trimInactiveWebviews,
+    idleMemoryTrimDelaySeconds: isIdleMemoryTrimDelaySeconds(
+      source.idleMemoryTrimDelaySeconds,
+    )
+      ? source.idleMemoryTrimDelaySeconds
+      : DEFAULT_SETTINGS.idleMemoryTrimDelaySeconds,
     websites: normalizeWebsites(source.websites),
     // `enabledWebsites` is what this field was called before the catalogue
     // became editable. It held site names, and the seeded sites use their name

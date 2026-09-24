@@ -28,6 +28,7 @@ use std::time::Duration;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::webview::{Cookie, Webview, WebviewBuilder};
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, State, WebviewUrl, Window,
@@ -36,7 +37,7 @@ use url::Url;
 
 use crate::identity;
 
-/// The first main window, which `tauri.conf.json` declares.
+/// The first main window, which `commands::open_main_window` creates.
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
 /// What every main window opened after the first is labelled with —
@@ -69,10 +70,8 @@ const PROFILE_DIRECTORY: &str = "browser-profile";
 /// Event a guest's message is re-broadcast on, for its own window to answer.
 const GUEST_MESSAGE_EVENT: &str = "multi-mind://guest-message";
 
-/// How long a window has to stay unfocused before its browsers are asked to
-/// trim. Short enough that a window left behind stops holding the memory,
-/// long enough that alt-tabbing back and forth does not churn their caches.
-const IDLE_DELAY: Duration = Duration::from_secs(10);
+/// The current default for the setting the user changes in Settings → Memory.
+const DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS: u64 = 10;
 
 /// Chromium switches every webview in the app is started with.
 ///
@@ -88,10 +87,7 @@ const IDLE_DELAY: Duration = Duration::from_secs(10);
 /// process on the user-data folder *and* these arguments, so two webviews
 /// sharing a folder with different arguments cannot both be created. The panes
 /// and the sign-in windows share `browser-profile`, the app's own pages share
-/// the default folder, and keeping all of them on one string is what makes that
-/// impossible to get wrong. `tauri.conf.json` repeats it for the main window,
-/// which is built from the config rather than from here — the test at the
-/// bottom of this file is what keeps the two copies the same.
+/// the default folder, and every native window takes the same startup choice.
 ///
 /// - `msWebOOUI,msPdfOOUI,msSmartScreenProtection` is wry's own default, and
 ///   overriding the argument string replaces it, so it has to be carried here.
@@ -109,10 +105,95 @@ const IDLE_DELAY: Duration = Duration::from_secs(10);
 ///   reuse *within* an origin, not across.
 /// - `--optimize-for-size` is V8 choosing memory over speed.
 ///
-/// Off Windows nothing outside the tests reads this: every use is behind
-/// `#[cfg(windows)]`, and the tests below still hold it to the config.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// Off Windows every use is behind `#[cfg(windows)]`.
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackForwardCache --enable-low-end-device-mode --process-per-site --js-flags=--optimize-for-size";
+
+/// The normal browser budget. The features wry disables by default must stay
+/// here because assigning arguments replaces its complete default string.
+#[cfg(windows)]
+const STANDARD_BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+
+/// The subset of memory controls that can safely change while the app runs.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MemoryTargetSettings {
+    trim_inactive_webviews: bool,
+    idle_memory_trim_delay: Duration,
+}
+
+impl MemoryTargetSettings {
+    fn from_settings(settings: &Value) -> Self {
+        let trim_inactive_webviews = settings
+            .get("trimInactiveWebviews")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        let idle_memory_trim_delay_seconds = settings
+            .get("idleMemoryTrimDelaySeconds")
+            .and_then(Value::as_u64)
+            .filter(|seconds| matches!(seconds, 5 | 10 | 30 | 60))
+            .unwrap_or(DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS);
+
+        Self {
+            trim_inactive_webviews,
+            idle_memory_trim_delay: Duration::from_secs(idle_memory_trim_delay_seconds),
+        }
+    }
+}
+
+/// The live memory-target policy. Browser arguments are immutable for one app
+/// run, but WebView2's idle budget is safe to change as soon as Settings saves.
+pub(crate) struct MemoryTargetPolicy(Mutex<MemoryTargetSettings>);
+
+impl MemoryTargetPolicy {
+    pub(crate) fn from_settings(settings: &Value) -> Self {
+        Self(Mutex::new(MemoryTargetSettings::from_settings(settings)))
+    }
+
+    fn current(&self) -> MemoryTargetSettings {
+        *self.0.lock().unwrap_or_else(|error| error.into_inner())
+    }
+
+    fn replace(&self, next: MemoryTargetSettings) -> bool {
+        let mut current = self.0.lock().unwrap_or_else(|error| error.into_inner());
+
+        if *current == next {
+            return false;
+        }
+
+        *current = next;
+        true
+    }
+}
+
+/// Browser arguments are fixed for the lifetime of the shared WebView2
+/// profile, so Settings applies this choice the next time the app starts.
+#[cfg(windows)]
+pub(crate) struct BrowserArguments(&'static str);
+
+#[cfg(windows)]
+impl BrowserArguments {
+    pub(crate) fn from_settings(settings: &Value) -> Self {
+        let memory_saving = settings
+            .get("browserMemorySaving")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+
+        Self(if memory_saving {
+            BROWSER_ARGS
+        } else {
+            STANDARD_BROWSER_ARGS
+        })
+    }
+
+    fn value(&self) -> &'static str {
+        self.0
+    }
+}
+
+#[cfg(windows)]
+pub(crate) fn browser_args<R: Runtime>(app: &AppHandle<R>) -> &'static str {
+    app.state::<BrowserArguments>().value()
+}
 
 /// Whether a label names a main window — the one from the config, or one of
 /// the copies opened since.
@@ -541,7 +622,7 @@ pub async fn guest_sync(
 
         #[cfg(windows)]
         {
-            builder = builder.additional_browser_args(BROWSER_ARGS);
+            builder = builder.additional_browser_args(browser_args(&app));
         }
 
         let webview = window
@@ -684,6 +765,7 @@ fn idle_sites<'a>(
 /// renderers the caches they then have to rebuild, and because reaching into
 /// a webview is a hop onto the main thread.
 fn apply_memory_targets<R: Runtime>(app: &AppHandle<R>) {
+    let memory_policy = app.state::<MemoryTargetPolicy>().current();
     let idle_windows = app.state::<GuestHost>().idle_windows();
 
     let guests: Vec<(String, Webview<R>)> = app
@@ -702,7 +784,10 @@ fn apply_memory_targets<R: Runtime>(app: &AppHandle<R>) {
             continue;
         };
 
-        set_webview_memory_target(webview, idle.contains(website_id));
+        set_webview_memory_target(
+            webview,
+            memory_policy.trim_inactive_webviews && idle.contains(website_id),
+        );
     }
 }
 
@@ -714,11 +799,21 @@ fn set_idle<R: Runtime>(app: &AppHandle<R>, window_label: &str, idle: bool) {
     apply_memory_targets(app);
 }
 
+/// Updates existing WebView2 targets after a live memory setting has changed.
+pub(crate) fn on_memory_settings_changed<R: Runtime>(app: &AppHandle<R>, settings: &Value) {
+    if app
+        .state::<MemoryTargetPolicy>()
+        .replace(MemoryTargetSettings::from_settings(settings))
+    {
+        apply_memory_targets(app);
+    }
+}
+
 /// A main window gained or lost the user's attention.
 ///
 /// Losing it waits: alt-tabbing out and straight back is not a reason to throw
 /// away three renderers' caches, so the budget only drops if the window is
-/// still in the background [`IDLE_DELAY`] later. Gaining it does not wait,
+/// still in the background after its configured delay. Gaining it does not wait,
 /// because the first thing that happens next is the user reading a pane.
 pub fn on_window_focus<R: Runtime>(app: &AppHandle<R>, window_label: &str, focused: bool) {
     let generation = app.state::<GuestHost>().bump_idle_generation(window_label);
@@ -728,11 +823,16 @@ pub fn on_window_focus<R: Runtime>(app: &AppHandle<R>, window_label: &str, focus
         return;
     }
 
+    let idle_memory_trim_delay = app
+        .state::<MemoryTargetPolicy>()
+        .current()
+        .idle_memory_trim_delay;
+
     let app = app.clone();
     let window_label = window_label.to_string();
 
     std::thread::spawn(move || {
-        std::thread::sleep(IDLE_DELAY);
+        std::thread::sleep(idle_memory_trim_delay);
 
         // A focus change since this timer started has already decided the
         // question, and may have decided it the other way; a window that has
@@ -744,7 +844,7 @@ pub fn on_window_focus<R: Runtime>(app: &AppHandle<R>, window_label: &str, focus
 }
 
 /// A minimised window is not being read by anyone, so its browsers go on the
-/// small budget at once rather than waiting out [`IDLE_DELAY`].
+/// small budget at once rather than waiting out the configured idle delay.
 pub fn on_window_resized<R: Runtime>(app: &AppHandle<R>, window_label: &str, minimized: bool) {
     if minimized {
         app.state::<GuestHost>().bump_idle_generation(window_label);
@@ -930,7 +1030,7 @@ pub async fn guest_open_popup(
     // will only build it if it asks for the same arguments they did.
     #[cfg(windows)]
     {
-        builder = builder.additional_browser_args(BROWSER_ARGS);
+        builder = builder.additional_browser_args(browser_args(&app));
     }
 
     builder.build().map_err(stringify)?;
@@ -1179,24 +1279,47 @@ mod tests {
         assert!(idle.contains("claude"));
     }
 
-    /*
-     * WebView2 keys its browser process on the user-data folder together with
-     * the arguments it was started with, and refuses a second webview on the
-     * same folder asking for different ones. The panes and the sign-in window
-     * take BROWSER_ARGS from this file; the main window is built from the
-     * config and every other window of the app has to match it, so the string
-     * is written twice. This is what notices when only one of them is edited.
-     */
     #[test]
-    fn the_config_asks_for_the_same_browser_arguments() {
-        let config: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+    fn memory_target_settings_keep_the_current_defaults() {
+        let settings = MemoryTargetSettings::from_settings(&serde_json::json!({}));
 
-        let configured = config["app"]["windows"][0]["additionalBrowserArgs"]
-            .as_str()
-            .expect("the main window should name its browser arguments");
+        assert!(settings.trim_inactive_webviews);
+        assert_eq!(
+            settings.idle_memory_trim_delay,
+            Duration::from_secs(DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS)
+        );
+    }
 
-        assert_eq!(configured, BROWSER_ARGS);
+    #[test]
+    fn memory_target_settings_accept_only_the_delays_offered_in_settings() {
+        let settings = MemoryTargetSettings::from_settings(&serde_json::json!({
+            "trimInactiveWebviews": false,
+            "idleMemoryTrimDelaySeconds": 30,
+        }));
+        let unsupported = MemoryTargetSettings::from_settings(&serde_json::json!({
+            "idleMemoryTrimDelaySeconds": 15,
+        }));
+
+        assert!(!settings.trim_inactive_webviews);
+        assert_eq!(settings.idle_memory_trim_delay, Duration::from_secs(30));
+        assert_eq!(
+            unsupported.idle_memory_trim_delay,
+            Duration::from_secs(DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn browser_memory_saving_choice_changes_only_the_next_launch_arguments() {
+        assert_eq!(
+            BrowserArguments::from_settings(&serde_json::json!({})).value(),
+            BROWSER_ARGS
+        );
+        assert_eq!(
+            BrowserArguments::from_settings(&serde_json::json!({ "browserMemorySaving": false }))
+                .value(),
+            STANDARD_BROWSER_ARGS
+        );
     }
 
     /*

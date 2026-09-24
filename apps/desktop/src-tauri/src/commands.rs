@@ -108,11 +108,10 @@ pub async fn open_window(app: AppHandle, window_name: String) -> OpenWindowResul
 
     // This window shares the default user-data folder with the main one, and
     // WebView2 will only build a second webview on a folder if it asks for the
-    // arguments the first did. `tauri.conf.json` gives the main window
-    // `guest::BROWSER_ARGS`; this is the other half of that pair.
+    // same browser arguments.
     #[cfg(windows)]
     {
-        builder = builder.additional_browser_args(crate::guest::BROWSER_ARGS);
+        builder = builder.additional_browser_args(crate::guest::browser_args(&app));
     }
 
     let built = builder.build();
@@ -182,36 +181,31 @@ fn cascade_position<R: Runtime>(near: Option<&Window<R>>) -> Option<(f64, f64)> 
 /// corrupted. A second window in this process shares the profile, and with it
 /// every sign-in.
 ///
-/// It is built from the same configuration the first window is, so the two are
-/// the same window in every respect that matters — including the browser
-/// arguments, which WebView2 requires every webview on a user-data folder to
-/// agree on.
+/// The first window and every copy are built here, so all native windows use
+/// the one browser-argument configuration WebView2 requires for a shared
+/// user-data folder.
 pub fn open_main_window<R: Runtime>(
     app: &AppHandle<R>,
     near: Option<&Window<R>>,
-) -> Result<String, String> {
-    let mut config = app
-        .config()
-        .app
-        .windows
-        .first()
-        .cloned()
-        .ok_or("The app has no window to copy.")?;
+) -> tauri::Result<String> {
+    let label = next_main_window_label(app);
+    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+        .title("Multi Mind")
+        .inner_size(800.0, 450.0)
+        .min_inner_size(640.0, 360.0)
+        .resizable(true)
+        .decorations(true)
+        .background_color(tauri::window::Color(0, 0, 0, 255));
 
-    config.label = next_main_window_label(app);
+    #[cfg(windows)]
+    let builder = builder.additional_browser_args(guest::browser_args(app));
 
-    if let Some((x, y)) = cascade_position(near) {
-        config.center = false;
-        config.x = Some(x);
-        config.y = Some(y);
-    }
+    let builder = match cascade_position(near) {
+        Some((x, y)) => builder.position(x, y),
+        None => builder.center(),
+    };
 
-    let label = config.label.clone();
-
-    WebviewWindowBuilder::from_config(app, &config)
-        .map_err(|error| error.to_string())?
-        .build()
-        .map_err(|error| error.to_string())?;
+    builder.build()?;
 
     Ok(label)
 }
@@ -239,6 +233,16 @@ mod tests {
     #[test]
     fn knows_the_settings_window() {
         assert!(page_of("settings").is_some());
+    }
+
+    #[test]
+    fn main_window_is_not_also_declared_in_the_config() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+
+        assert!(config["app"]["windows"]
+            .as_array()
+            .is_some_and(Vec::is_empty));
     }
 
     /*

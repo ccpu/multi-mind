@@ -15,7 +15,7 @@ mod settings;
 #[cfg(desktop)]
 mod updater;
 
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -111,11 +111,28 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            app.manage(settings::SettingsStore::load(settings::default_directory(
-                &handle,
-            )));
+            let settings_store =
+                settings::SettingsStore::load(settings::default_directory(&handle));
+            let saved_settings = settings_store.settings();
+
+            app.manage(settings_store);
+            app.manage(guest::MemoryTargetPolicy::from_settings(&saved_settings));
+            #[cfg(windows)]
+            app.manage(guest::BrowserArguments::from_settings(&saved_settings));
             app.manage(guest::GuestHost::new(guest::profile_directory(&handle)));
             app.manage(menu::PendingMenu::default());
+
+            let memory_handle = handle.clone();
+            handle.listen(settings::SETTINGS_CHANGED_EVENT, move |event| {
+                let Ok(settings) = serde_json::from_str::<serde_json::Value>(event.payload())
+                else {
+                    return;
+                };
+
+                guest::on_memory_settings_changed(&memory_handle, &settings);
+            });
+
+            commands::open_main_window(&handle, None)?;
 
             #[cfg(desktop)]
             if updater::is_configured(app.config()) {
