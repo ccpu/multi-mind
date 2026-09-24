@@ -1,3 +1,13 @@
+# [1.4.0](https://github.com/ccpu/multi-mind/compare/v1.3.0...v1.4.0) (2026-09-24)
+
+
+### Features
+
+* **browser:** enhance browser memory management settings ([a392961](https://github.com/ccpu/multi-mind/commit/a3929614ab6dbef7fdce1af8dae6e2fd065ce25f))
+* **settings:** add memory management options and settings integration ([c1ee4cf](https://github.com/ccpu/multi-mind/commit/c1ee4cfa979798296ff91147c275d0c704f44781))
+* **tests:** add conditional compilation for browser arguments on Windows ([74f3f02](https://github.com/ccpu/multi-mind/commit/74f3f02901b03ebf77830dcf5e79926f86c07e1e))
+* **updater:** enhance update decision logic and add tests ([9e47f6d](https://github.com/ccpu/multi-mind/commit/9e47f6d1c1cba3d04848159d797692c673c5d28b))
+
 # [1.3.0](https://github.com/ccpu/multi-mind/compare/v1.2.0...v1.3.0) (2026-09-23)
 
 
