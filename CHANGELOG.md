@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/ccpu/multi-mind/compare/v1.5.0...v1.6.0) (2026-09-25)
+
+
+### Features
+
+* **search:** implement search history functionality ([a8f217b](https://github.com/ccpu/multi-mind/commit/a8f217b9f0564fe5914c740aca16fd6f503fd679))
+
 # [1.5.0](https://github.com/ccpu/multi-mind/compare/v1.4.1...v1.5.0) (2026-09-25)
 
 
