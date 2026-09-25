@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::search::SearchStore;
+
 /// Name of the settings file itself, matching `SETTINGS_FILE_NAME`.
 const SETTINGS_FILE_NAME: &str = "settings.json";
 
@@ -122,7 +124,7 @@ impl SettingsStore {
         self.settings.lock().expect("settings poisoned").clone()
     }
 
-    fn directory(&self) -> PathBuf {
+    pub(crate) fn directory(&self) -> PathBuf {
         self.directory.lock().expect("directory poisoned").clone()
     }
 
@@ -193,7 +195,8 @@ impl SettingsStore {
         directory: &str,
         request: &SettingsLocationRequest,
     ) -> SettingsLocationResult {
-        let (result, adopted) = self.relocate(directory, request);
+        let search = app.state::<SearchStore>();
+        let (result, adopted) = self.relocate(directory, request, Some(&search));
 
         if let Some(value) = adopted {
             self.commit(app, value);
@@ -211,6 +214,7 @@ impl SettingsStore {
         &self,
         directory: &str,
         request: &SettingsLocationRequest,
+        search: Option<&SearchStore>,
     ) -> (SettingsLocationResult, Option<Value>) {
         let resolved = PathBuf::from(directory.trim());
         let target = resolved.join(SETTINGS_FILE_NAME);
@@ -264,6 +268,24 @@ impl SettingsStore {
 
         let previous_path = self.file_path();
         let adopt = occupied && request.conflict.as_deref() == Some("adopt");
+        let replaced_settings = if occupied && !adopt {
+            match fs::read(&target) {
+                Ok(bytes) => Some(bytes),
+                Err(error) => {
+                    return (
+                        SettingsLocationResult::invalid(
+                            &resolved,
+                            format!(
+                                "The settings file already there could not be backed up: {error}"
+                            ),
+                        ),
+                        None,
+                    );
+                }
+            }
+        } else {
+            None
+        };
 
         let adopted = if adopt {
             match read_json(&target) {
@@ -291,6 +313,27 @@ impl SettingsStore {
 
             None
         };
+
+        if let Some(search) = search {
+            if let Err(error) = search.move_to(&resolved) {
+                let rollback = if adopt {
+                    Ok(())
+                } else {
+                    if let Some(bytes) = replaced_settings {
+                        fs::write(&target, bytes)
+                    } else {
+                        fs::remove_file(&target)
+                    }
+                };
+                let message = match rollback {
+                    Ok(()) => format!("The search database could not be moved: {error}"),
+                    Err(rollback_error) => format!(
+                        "The search database could not be moved: {error}; the target settings file could not be restored: {rollback_error}"
+                    ),
+                };
+                return (SettingsLocationResult::invalid(&resolved, message), None);
+            }
+        }
 
         {
             let mut current = self.directory.lock().expect("directory poisoned");
@@ -566,7 +609,8 @@ mod tests {
         let target = std::env::temp_dir().join("multi-mind-not-there-yet");
         let _ = fs::remove_dir_all(&target);
 
-        let (result, adopted) = store.relocate(&target.display().to_string(), &Default::default());
+        let (result, adopted) =
+            store.relocate(&target.display().to_string(), &Default::default(), None);
 
         assert_eq!(result.status, "missing");
         assert!(adopted.is_none());
@@ -580,7 +624,8 @@ mod tests {
         let target_file = target.join(SETTINGS_FILE_NAME);
         fs::write(&target_file, r#"{ "marker": "theirs" }"#).expect("write settings");
 
-        let (result, adopted) = store.relocate(&target.display().to_string(), &Default::default());
+        let (result, adopted) =
+            store.relocate(&target.display().to_string(), &Default::default(), None);
 
         assert_eq!(result.status, "occupied");
         assert!(adopted.is_none());
@@ -600,7 +645,8 @@ mod tests {
         let target_file = target.join(SETTINGS_FILE_NAME);
         fs::write(&target_file, r#"{ "marker": "theirs" }"#).expect("write settings");
 
-        let (result, adopted) = store.relocate(&target.display().to_string(), &conflict("adopt"));
+        let (result, adopted) =
+            store.relocate(&target.display().to_string(), &conflict("adopt"), None);
 
         assert_eq!(result.status, "ok");
         // The settings that were there are what every window is told about.
@@ -624,7 +670,8 @@ mod tests {
         let target_file = target.join(SETTINGS_FILE_NAME);
         fs::write(&target_file, r#"{ "marker": "theirs" }"#).expect("write settings");
 
-        let (result, adopted) = store.relocate(&target.display().to_string(), &conflict("replace"));
+        let (result, adopted) =
+            store.relocate(&target.display().to_string(), &conflict("replace"), None);
 
         assert_eq!(result.status, "ok");
         // Nothing to announce: the settings in use are the ones that survived.
@@ -644,7 +691,7 @@ mod tests {
         let default_directory = store.default_directory.clone();
         let target = temp_dir("move-pointer-target");
 
-        let (result, _) = store.relocate(&target.display().to_string(), &Default::default());
+        let (result, _) = store.relocate(&target.display().to_string(), &Default::default(), None);
         assert_eq!(result.status, "ok");
 
         let pointer = default_directory.join(SETTINGS_LOCATION_FILE_NAME);
@@ -657,8 +704,64 @@ mod tests {
         let (back, _) = store.relocate(
             &default_directory.display().to_string(),
             &Default::default(),
+            None,
         );
         assert_eq!(back.status, "ok");
         assert!(!pointer.exists());
+    }
+
+    #[test]
+    fn moving_settings_moves_the_search_database_with_them() {
+        let store = store_holding("move-search", "mine");
+        let source = store.directory().join("search.sqlite3");
+        let search = SearchStore::open(store.directory()).unwrap();
+        let connection = rusqlite::Connection::open(&source).unwrap();
+        connection
+            .execute(
+                "INSERT INTO prompt_entries (website_id, prompt) VALUES (?1, ?2)",
+                rusqlite::params!["claude", "Keep this prompt"],
+            )
+            .unwrap();
+        drop(connection);
+        let target = temp_dir("move-search-target");
+
+        let (result, _) = store.relocate(
+            &target.display().to_string(),
+            &Default::default(),
+            Some(&search),
+        );
+
+        assert_eq!(result.status, "ok");
+        assert!(!source.exists());
+        let moved = rusqlite::Connection::open(target.join("search.sqlite3")).unwrap();
+        let count: i64 = moved
+            .query_row(
+                "SELECT COUNT(*) FROM prompt_entries WHERE prompt = 'Keep this prompt'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn a_failed_database_move_keeps_the_current_settings_location() {
+        let store = store_holding("move-search-failure", "mine");
+        let current = store.directory();
+        let search = SearchStore::open(current.clone()).unwrap();
+        let target = temp_dir("move-search-failure-target");
+        fs::write(target.join("search.sqlite3"), b"not a database").unwrap();
+
+        let (result, adopted) = store.relocate(
+            &target.display().to_string(),
+            &Default::default(),
+            Some(&search),
+        );
+
+        assert_eq!(result.status, "invalid");
+        assert!(adopted.is_none());
+        assert_eq!(store.directory(), current);
+        assert!(current.join("search.sqlite3").exists());
+        assert!(!target.join(SETTINGS_FILE_NAME).exists());
     }
 }

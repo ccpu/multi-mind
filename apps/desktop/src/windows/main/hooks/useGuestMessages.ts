@@ -1,4 +1,8 @@
-import type { GuestContextMenuReport, GuestWindowRequest } from '@internal/multi-mind';
+import type {
+  GuestContextMenuReport,
+  GuestPageReport,
+  GuestWindowRequest,
+} from '@internal/multi-mind';
 import type { GuestBounds } from '@internal/tauri-api';
 import {
   CLICKED_MESSAGE,
@@ -7,6 +11,7 @@ import {
   decideGuestWindow,
   MENU_MESSAGE_PREFIX,
   OPEN_MESSAGE_PREFIX,
+  PAGE_MESSAGE_PREFIX,
   parsePrefixedMessage,
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
@@ -18,6 +23,7 @@ export interface UseGuestMessagesOptions {
   boundsOf: (websiteId: string) => GuestBounds | null;
   /** A press inside a browser, which collapses the prompt box. */
   onClicked: () => void;
+  onPageReported?: (websiteId: string, page: GuestPageReport) => void;
 }
 
 /**
@@ -34,7 +40,11 @@ export interface UseGuestMessagesOptions {
  * the same functions, `decideGuestWindow` and `buildContextMenuModel`, that
  * decided them before.
  */
-export function useGuestMessages({ boundsOf, onClicked }: UseGuestMessagesOptions): void {
+export function useGuestMessages({
+  boundsOf,
+  onClicked,
+  onPageReported,
+}: UseGuestMessagesOptions): void {
   const showContextMenu = useGuestContextMenu({ boundsOf });
 
   const handleOpenRequest = useCallback((message: string) => {
@@ -98,9 +108,24 @@ export function useGuestMessages({ boundsOf, onClicked }: UseGuestMessagesOption
         return;
       }
 
+      if (message.startsWith(PAGE_MESSAGE_PREFIX)) {
+        const report = parsePrefixedMessage<GuestPageReport>(
+          message,
+          PAGE_MESSAGE_PREFIX,
+        );
+        if (
+          report !== null &&
+          typeof report.url === 'string' &&
+          typeof report.title === 'string'
+        ) {
+          onPageReported?.(websiteId, report);
+        }
+        return;
+      }
+
       console.error('Unexpected message from an embedded browser:', message);
     },
-    [handleMenuRequest, handleOpenRequest, onClicked],
+    [handleMenuRequest, handleOpenRequest, onClicked, onPageReported],
   );
 
   useEffect(() => appApi.events.onGuestMessage(handleMessage), [handleMessage]);

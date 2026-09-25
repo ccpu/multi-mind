@@ -1,4 +1,5 @@
 import type { GuestConfig } from '@internal/multi-mind';
+import type { SearchEntry } from '@internal/tauri-api';
 import type { PromptEditorHandle } from './types/prompt-editor';
 import {
   composePrompt,
@@ -22,6 +23,7 @@ import { useAppSettings } from './hooks/useAppSettings';
 import { useGuestMessages } from './hooks/useGuestMessages';
 import { useGuestPanes } from './hooks/useGuestPanes';
 import { useOverlayPresence } from './hooks/useOverlayPresence';
+import { useSearchHistory } from './hooks/useSearchHistory';
 import { useSplitLayout } from './hooks/useSplitLayout';
 
 /**
@@ -36,6 +38,7 @@ function App() {
     settings,
     loaded,
     toggleWebsite,
+    openWebsite,
     togglePreset,
     addPreset,
     updatePreset,
@@ -76,16 +79,18 @@ function App() {
     reset: resetLayout,
   } = useSplitLayout(paneKeys);
 
-  const { register: registerPane, boundsOf } = useGuestPanes(
-    guestConfig === null ? [] : activeWebsites,
-    guestConfig,
-  );
+  const {
+    register: registerPane,
+    boundsOf,
+    openUrl,
+  } = useGuestPanes(guestConfig === null ? [] : activeWebsites, guestConfig);
 
   const collapsePrompt = useCallback(() => {
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
   }, []);
 
-  useGuestMessages({ boundsOf, onClicked: collapsePrompt });
+  const { recordPrompt, reportPage, stopTracking } = useSearchHistory();
+  useGuestMessages({ boundsOf, onClicked: collapsePrompt, onPageReported: reportPage });
 
   const overlayOpen = useOverlayPresence();
 
@@ -174,11 +179,19 @@ function App() {
     }
 
     getActiveWebsites(settingsRef.current).forEach((website) => {
+      const savePrompt = recordPrompt(website.id, composed);
       appApi.guest
         .run(website.id, createRunPromptScript(website, composed, guestGlobals))
-        .catch((error: unknown) => {
-          console.error(`Failed to run the prompt on ${website.name}:`, error);
-        });
+        .then(
+          () => {
+            savePrompt().catch((error: unknown) => {
+              console.error(`Failed to save prompt history for ${website.name}:`, error);
+            });
+          },
+          (error: unknown) => {
+            console.error(`Failed to run the prompt on ${website.name}:`, error);
+          },
+        );
     });
 
     // Only what was typed is worth stepping back to; the presets re-apply
@@ -189,16 +202,29 @@ function App() {
 
     setPrompt('');
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, []);
+  }, [recordPrompt]);
+
+  const openSearchResult = useCallback(
+    (entry: SearchEntry) => {
+      if (!/^https?:\/\//iu.test(entry.url)) {
+        return;
+      }
+      stopTracking(entry.websiteId);
+      openUrl(entry.websiteId, entry.url);
+      openWebsite(entry.websiteId);
+    },
+    [openUrl, openWebsite, stopTracking],
+  );
 
   /** Port of `WebViewManager.Reload`. */
   const handleReload = useCallback(() => {
     getActiveWebsites(settingsRef.current).forEach((website) => {
+      stopTracking(website.id);
       appApi.guest.navigate(website.id, website.url).catch((error: unknown) => {
         console.error(`Failed to reload ${website.name}:`, error);
       });
     });
-  }, []);
+  }, [stopTracking]);
 
   const goLastPrompt = useCallback(() => {
     historyRef.current.previous();
@@ -244,6 +270,7 @@ function App() {
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <MenuBar
         websites={menuWebsites}
+        allWebsites={settings.websites}
         activeWebsites={settings.activeWebsites}
         onReload={handleReload}
         onResetLayout={resetLayout}
@@ -252,6 +279,7 @@ function App() {
         onToggleWebsite={toggleWebsite}
         onOpenSettings={openSettings}
         onNewWindow={openNewWindow}
+        onOpenResult={openSearchResult}
       />
 
       <div

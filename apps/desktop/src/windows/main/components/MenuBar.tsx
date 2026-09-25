@@ -1,4 +1,5 @@
 import type { WebsiteInfo } from '@internal/multi-mind';
+import type { SearchEntry } from '@internal/tauri-api';
 import { Logo } from '@internal/ui';
 import {
   DropdownMenu,
@@ -17,10 +18,13 @@ import {
   Settings,
   Undo2,
 } from 'lucide-react';
+import { SearchHistory } from './search/SearchHistory';
 
 interface MenuBarProps {
   /** The sites enabled in the settings window, in the order set there. */
   websites: readonly WebsiteInfo[];
+  /** Includes disabled providers so saved results can re-enable them. */
+  allWebsites: readonly WebsiteInfo[];
   /** Ids of the sites whose browser is open. */
   activeWebsites: readonly string[];
   onReload: () => void;
@@ -31,6 +35,7 @@ interface MenuBarProps {
   onOpenSettings: () => void;
   /** Opens another copy of this window, signed in to the same sites. */
   onNewWindow: () => void;
+  onOpenResult: (entry: SearchEntry) => void;
 }
 
 /**
@@ -41,6 +46,7 @@ interface MenuBarProps {
  */
 export function MenuBar({
   websites,
+  allWebsites,
   activeWebsites,
   onReload,
   onResetLayout,
@@ -49,6 +55,7 @@ export function MenuBar({
   onToggleWebsite,
   onOpenSettings,
   onNewWindow,
+  onOpenResult,
 }: MenuBarProps) {
   return (
     <header className="flex h-10 shrink-0 items-center gap-1 border-b bg-background px-2 select-none">
@@ -93,6 +100,8 @@ export function MenuBar({
       </Button>
 
       <div className="flex-1" />
+
+      <SearchHistory websites={allWebsites} onOpenResult={onOpenResult} />
 
       <div className="flex items-center gap-1">
         {websites.map((website) => {

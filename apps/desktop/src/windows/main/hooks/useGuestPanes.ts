@@ -9,6 +9,8 @@ export interface UseGuestPanesResult {
   register: (websiteId: string, element: HTMLDivElement | null) => void;
   /** Where a pane sits right now, for turning a guest click into a window point. */
   boundsOf: (websiteId: string) => GuestBounds | null;
+  /** Navigates now, or after the site's pane has been created. */
+  openUrl: (websiteId: string, url: string) => void;
 }
 
 function readBounds(element: HTMLElement): GuestBounds {
@@ -41,6 +43,7 @@ export function useGuestPanes(
 ): UseGuestPanesResult {
   const elements = useRef(new Map<string, HTMLDivElement>());
   const lastPayload = useRef('');
+  const pendingUrlsRef = useRef(new Map<string, string>());
 
   /*
    * The sites whose scripts Rust already holds.
@@ -115,6 +118,18 @@ export function useGuestPanes(
       () => {
         for (const pane of panes) {
           sentScripts.current.add(pane.websiteId);
+          const url = pendingUrlsRef.current.get(pane.websiteId);
+          if (url !== undefined) {
+            appApi.guest.navigate(pane.websiteId, url).then(
+              () => {
+                if (pendingUrlsRef.current.get(pane.websiteId) === url) {
+                  pendingUrlsRef.current.delete(pane.websiteId);
+                }
+              },
+              (error: unknown) =>
+                console.error('Failed to open saved conversation:', error),
+            );
+          }
         }
       },
       (error: unknown) => {
@@ -142,6 +157,20 @@ export function useGuestPanes(
     const element = elements.current.get(websiteId);
 
     return element === undefined ? null : readBounds(element);
+  }, []);
+
+  const openUrl = useCallback((websiteId: string, url: string) => {
+    pendingUrlsRef.current.set(websiteId, url);
+    if (sentScripts.current.has(websiteId)) {
+      appApi.guest.navigate(websiteId, url).then(
+        () => {
+          if (pendingUrlsRef.current.get(websiteId) === url) {
+            pendingUrlsRef.current.delete(websiteId);
+          }
+        },
+        (error: unknown) => console.error('Failed to open saved conversation:', error),
+      );
+    }
   }, []);
 
   // Sites come and go, and the prompt panel's height changes the row above it,
@@ -172,5 +201,5 @@ export function useGuestPanes(
     // ids stand for.
   }, [sync, websites.map((website) => website.id).join('\u0000')]);
 
-  return { register, boundsOf };
+  return { register, boundsOf, openUrl };
 }

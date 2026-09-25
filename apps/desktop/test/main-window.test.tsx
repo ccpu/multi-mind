@@ -1,5 +1,5 @@
-import type { AppSettings } from '@internal/multi-mind';
-import type { GuestPane } from '@internal/tauri-api';
+import type { AppSettings, GuestMessageEvent } from '@internal/multi-mind';
+import type { GuestPane, SearchEntry } from '@internal/tauri-api';
 import { DEFAULT_SETTINGS, DEFAULT_WEBSITES } from '@internal/multi-mind';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,7 +12,12 @@ const newWindow = vi.fn<() => Promise<{ success: boolean; message: string }>>();
 const guestSync = vi.fn<(panes: readonly GuestPane[]) => Promise<void>>();
 const guestRun = vi.fn<(websiteId: string, script: string) => Promise<void>>();
 const guestNavigate = vi.fn<(websiteId: string, url: string) => Promise<void>>();
+const searchAddPrompt = vi.fn<(websiteId: string, prompt: string) => Promise<number>>();
+const searchUpdatePrompt =
+  vi.fn<(id: number, title: string, url: string) => Promise<void>>();
+const searchPrompts = vi.fn<(query: string) => Promise<SearchEntry[]>>();
 const settingsListeners = new Set<(settings: AppSettings) => void>();
+const guestListeners = new Set<(event: GuestMessageEvent) => void>();
 
 vi.mock('@internal/tauri-api', () => ({
   openExternal: vi.fn(),
@@ -28,13 +33,21 @@ vi.mock('@internal/tauri-api', () => ({
       }),
       newWindow: async () => newWindow(),
       getGuestConfig: async () => ({ bridgeKey: '_bridge', findKey: '_find' }),
+      searchAddPrompt: async (websiteId: string, prompt: string) =>
+        searchAddPrompt(websiteId, prompt),
+      searchUpdatePrompt: async (id: number, title: string, url: string) =>
+        searchUpdatePrompt(id, title, url),
+      searchPrompts: async (query: string) => searchPrompts(query),
     },
     events: {
       onSettingsChanged: (callback: (settings: AppSettings) => void) => {
         settingsListeners.add(callback);
         return () => settingsListeners.delete(callback);
       },
-      onGuestMessage: () => () => undefined,
+      onGuestMessage: (callback: (event: GuestMessageEvent) => void) => {
+        guestListeners.add(callback);
+        return () => guestListeners.delete(callback);
+      },
     },
     guest: {
       sync: async (panes: readonly GuestPane[]) => guestSync(panes),
@@ -75,6 +88,7 @@ async function waitForPanes(): Promise<GuestPane[]> {
 beforeEach(() => {
   vi.clearAllMocks();
   settingsListeners.clear();
+  guestListeners.clear();
   // The prompt box behaviour below is the same whichever editor is in it, and
   // the plain one is the one jsdom can be typed into.
   settingsGet.mockResolvedValue(stub({ promptEditor: 'plain' }));
@@ -86,6 +100,9 @@ beforeEach(() => {
   guestSync.mockResolvedValue(undefined);
   guestRun.mockResolvedValue(undefined);
   guestNavigate.mockResolvedValue(undefined);
+  searchAddPrompt.mockResolvedValue(1);
+  searchUpdatePrompt.mockResolvedValue(undefined);
+  searchPrompts.mockResolvedValue([]);
 });
 
 describe('main window', () => {
@@ -262,6 +279,83 @@ describe('main window', () => {
     });
     expect(guestRun.mock.calls[0]?.[0]).toBe('claude');
     expect(guestRun.mock.calls[0]?.[1]).toContain('Be terse.');
+  });
+
+  it('saves one searchable record per provider and updates its conversation address', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
+    );
+    searchAddPrompt.mockImplementation(async (websiteId) =>
+      websiteId === 'claude' ? 1 : 2,
+    );
+    render(<App />);
+    await waitForPanes();
+
+    await user.type(
+      screen.getByPlaceholderText(/Ask every enabled model/u),
+      'Compare these',
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() => {
+      expect(searchAddPrompt).toHaveBeenCalledWith('claude', 'Compare these');
+      expect(searchAddPrompt).toHaveBeenCalledWith('chatgpt', 'Compare these');
+    });
+
+    guestListeners.forEach((listener) =>
+      listener({
+        websiteId: 'chatgpt',
+        message: '__page__{"url":"https://chatgpt.com/c/123","title":"Comparison"}',
+      }),
+    );
+    await waitFor(() => {
+      expect(searchUpdatePrompt).toHaveBeenCalledWith(
+        2,
+        'Comparison',
+        'https://chatgpt.com/c/123',
+      );
+    });
+  });
+
+  it('enables a disabled provider and opens a saved conversation', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        websites: DEFAULT_WEBSITES.map((website) =>
+          website.id === 'chatgpt' ? { ...website, enabled: false } : website,
+        ),
+      }),
+    );
+    searchPrompts.mockResolvedValue([
+      {
+        id: 12,
+        websiteId: 'chatgpt',
+        prompt: 'Compare these',
+        title: 'Comparison',
+        url: 'https://chatgpt.com/c/123',
+      },
+    ]);
+    render(<App />);
+    await screen.findByPlaceholderText(/Ask every enabled model/u);
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search saved prompts' }),
+      'Compare',
+    );
+    await user.click(await screen.findByRole('button', { name: /Compare these/u }));
+
+    expect(settingsSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeWebsites: ['chatgpt'],
+        websites: expect.arrayContaining([
+          expect.objectContaining({ id: 'chatgpt', enabled: true }),
+        ]),
+      }),
+    );
+    await waitFor(() => {
+      expect(guestNavigate).toHaveBeenCalledWith('chatgpt', 'https://chatgpt.com/c/123');
+    });
   });
 
   it('sends nothing when the box is empty and no preset is ticked', async () => {

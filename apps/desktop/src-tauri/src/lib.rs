@@ -11,6 +11,7 @@ mod commands;
 mod guest;
 mod identity;
 mod menu;
+mod search;
 mod settings;
 #[cfg(desktop)]
 mod updater;
@@ -45,6 +46,9 @@ pub fn run() {
             settings::get_settings_location,
             settings::set_settings_location,
             settings::reset_settings_location,
+            search::search_add_prompt,
+            search::search_update_prompt,
+            search::search_prompts,
             guest::get_guest_config,
             guest::guest_sync,
             guest::guest_set_visible,
@@ -113,8 +117,13 @@ pub fn run() {
             let settings_store =
                 settings::SettingsStore::load(settings::default_directory(&handle));
             let saved_settings = settings_store.settings();
+            let search_store = search::SearchStore::open_for_settings(
+                &settings::default_directory(&handle),
+                &settings_store.directory(),
+            )?;
 
             app.manage(settings_store);
+            app.manage(search_store);
             app.manage(guest::MemoryTargetPolicy::from_settings(&saved_settings));
             #[cfg(windows)]
             app.manage(guest::BrowserArguments::from_settings(&saved_settings));

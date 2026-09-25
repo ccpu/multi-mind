@@ -15,6 +15,8 @@ export interface UseAppSettingsResult {
   /** False until the persisted settings have come back from Rust. */
   loaded: boolean;
   toggleWebsite: (websiteId: string) => void;
+  /** Enables and opens a provider when a saved result is selected. */
+  openWebsite: (websiteId: string) => void;
   /** Ticks a prompt preset on or off. */
   togglePreset: (promptId: string) => void;
   /** Adds a preset to the library. */
@@ -96,6 +98,29 @@ export function useAppSettings(): UseAppSettingsResult {
     [save],
   );
 
+  const openWebsite = useCallback(
+    (websiteId: string) => {
+      const { current } = settingsRef;
+      const website = current.websites.find((item) => item.id === websiteId);
+      if (website === undefined) {
+        return;
+      }
+      const patch: Partial<AppSettings> = {};
+      if (!website.enabled) {
+        patch.websites = current.websites.map((item) =>
+          item.id === websiteId ? { ...item, enabled: true } : item,
+        );
+      }
+      if (!current.activeWebsites.includes(websiteId)) {
+        patch.activeWebsites = [...current.activeWebsites, websiteId];
+      }
+      if (Object.keys(patch).length > 0) {
+        save(patch);
+      }
+    },
+    [save],
+  );
+
   const togglePreset = useCallback(
     (promptId: string) => {
       save({ activePrompts: togglePrompt(settingsRef.current, promptId).activePrompts });
@@ -130,6 +155,7 @@ export function useAppSettings(): UseAppSettingsResult {
     settings,
     loaded,
     toggleWebsite,
+    openWebsite,
     togglePreset,
     addPreset,
     updatePreset,

@@ -82,6 +82,14 @@ export const OPEN_MESSAGE_PREFIX = '__open__';
 /** Prefix of the message a guest sends when it was right-clicked. */
 export const MENU_MESSAGE_PREFIX = '__menu__';
 
+/** Prefix for periodically reported guest URL and title metadata. */
+export const PAGE_MESSAGE_PREFIX = '__page__';
+
+export interface GuestPageReport {
+  url: string;
+  title: string;
+}
+
 /** Bridge shape exposed into the guest page's main world. */
 export interface MultiMindHostBridge {
   postMessage: (message: string) => void;

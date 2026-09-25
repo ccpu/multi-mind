@@ -14,8 +14,8 @@ import { useCallback } from 'react';
 import { useSettingsLocation } from '../hooks/useSettingsLocation';
 
 /**
- * The folder the app keeps its data in — `settings.json` today, anything else
- * it stores later. Pointing it at a synced folder is the reason this exists, so
+ * The folder the app keeps `settings.json` and `search.sqlite3` in.
+ * Pointing it at a synced folder is the reason this exists, so
  * the folder can be typed as well as picked — a network share is often quicker
  * to paste than to browse to.
  */
@@ -33,8 +33,8 @@ export function DataFolderCard() {
       <CardHeader>
         <CardTitle>Data folder</CardTitle>
         <CardDescription>
-          Where Multi Mind keeps its data, such as <code>settings.json</code>. Moving it
-          takes the current data along.
+          Where Multi Mind keeps <code>settings.json</code> and{' '}
+          <code>search.sqlite3</code>. Moving it takes the current data along.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

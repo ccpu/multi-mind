@@ -23,6 +23,7 @@ import {
   guestSync,
   guestUrl,
 } from './guest';
+import { searchAddPrompt, searchPrompts, searchUpdatePrompt } from './search';
 
 /**
  * The whole bridge, as one object.
@@ -46,6 +47,9 @@ export const appApi = {
     setSettingsLocation,
     resetSettingsLocation,
     newWindow,
+    searchAddPrompt,
+    searchUpdatePrompt,
+    searchPrompts,
   },
 
   /** Things Rust announces, each returning its own unsubscribe. */

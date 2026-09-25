@@ -5,6 +5,7 @@ import {
   CTRL_ENTER_MESSAGE,
   MENU_MESSAGE_PREFIX,
   OPEN_MESSAGE_PREFIX,
+  PAGE_MESSAGE_PREFIX,
 } from './messages';
 
 /**
@@ -71,6 +72,28 @@ export function createClickReporterScript({ bridgeKey }: GuestGlobals): string {
   document.addEventListener('click', function () {
     window[${JSON.stringify(bridgeKey)}].postMessage(${JSON.stringify(CLICKED_MESSAGE)});
   });
+`;
+}
+
+/** Reports page metadata when a guest navigates or changes its title. */
+export function createPageReporterScript({ bridgeKey }: GuestGlobals): string {
+  const bridge = JSON.stringify(bridgeKey);
+  const prefix = JSON.stringify(PAGE_MESSAGE_PREFIX);
+
+  return `
+  (function () {
+    var previous = '';
+    function report() {
+      var page = { url: location.href, title: document.title };
+      var value = JSON.stringify(page);
+      if (value !== previous) {
+        previous = value;
+        window[${bridge}].postMessage(${prefix} + value);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', report);
+    setInterval(report, 2000);
+  })();
 `;
 }
 
@@ -320,6 +343,7 @@ export function createGuestScripts(
     createCtrlEnterReporterScript(globals),
     createGuestWindowScript(globals),
     createContextMenuReporterScript(globals),
+    createPageReporterScript(globals),
   ].map(asVoidScript);
 }
 
