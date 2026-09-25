@@ -7,9 +7,9 @@ import {
   DialogTitle,
   ThemeModeToggleButton,
 } from '@internal/ui';
+import { DataFolderCard } from './components/DataFolderCard';
 import { MemoryCard } from './components/MemoryCard';
 import { PromptBoxCard } from './components/PromptBoxCard';
-import { SettingsFileCard } from './components/SettingsFileCard';
 import { UpdatesCard } from './components/UpdatesCard';
 import { WebsitesCard } from './components/WebsitesCard';
 import { useSettingsStore } from './hooks/useSettingsStore';
@@ -57,7 +57,7 @@ function SettingsCards() {
       <WebsitesCard settings={settings} onChange={update} />
       <MemoryCard settings={settings} onChange={update} />
       <UpdatesCard settings={settings} onChange={update} />
-      <SettingsFileCard />
+      <DataFolderCard />
     </div>
   );
 }

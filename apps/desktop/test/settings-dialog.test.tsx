@@ -330,14 +330,12 @@ describe('settings window', () => {
     });
   });
 
-  describe('settings file location', () => {
-    it('shows where the settings file is kept', async () => {
+  describe('data folder', () => {
+    it('shows where the data is kept', async () => {
       render(<App />);
 
       expect(await screen.findByLabelText('Folder')).toHaveValue(DEFAULT_DIRECTORY);
-      expect(
-        screen.getByText(`${DEFAULT_DIRECTORY}\\settings.json (default)`),
-      ).toBeInTheDocument();
+      expect(screen.getByText(`${DEFAULT_DIRECTORY} (default)`)).toBeInTheDocument();
     });
 
     it('fills the box from the native folder picker', async () => {

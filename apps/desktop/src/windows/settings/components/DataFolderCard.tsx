@@ -14,11 +14,12 @@ import { useCallback } from 'react';
 import { useSettingsLocation } from '../hooks/useSettingsLocation';
 
 /**
- * Where `settings.json` is kept. Pointing it at a synced folder is the reason
- * this exists, so the folder can be typed as well as picked — a network share
- * is often quicker to paste than to browse to.
+ * The folder the app keeps its data in — `settings.json` today, anything else
+ * it stores later. Pointing it at a synced folder is the reason this exists, so
+ * the folder can be typed as well as picked — a network share is often quicker
+ * to paste than to browse to.
  */
-export function SettingsFileCard() {
+export function DataFolderCard() {
   const { location, draft, setDraft, status, busy, browse, save, useDefault } =
     useSettingsLocation();
 
@@ -30,18 +31,18 @@ export function SettingsFileCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Settings file</CardTitle>
+        <CardTitle>Data folder</CardTitle>
         <CardDescription>
-          The folder holding <code>settings.json</code>. Moving it takes the current
-          settings along.
+          Where Multi Mind keeps its data, such as <code>settings.json</code>. Moving it
+          takes the current data along.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="settings-directory">Folder</Label>
+          <Label htmlFor="data-directory">Folder</Label>
           <div className="flex gap-2">
             <Input
-              id="settings-directory"
+              id="data-directory"
               value={draft}
               spellCheck={false}
               placeholder="D:\Multi Mind"
@@ -82,7 +83,7 @@ export function SettingsFileCard() {
 
         {location !== null && (
           <p className="font-mono text-xs break-all text-muted-foreground">
-            {location.filePath}
+            {location.directory}
             {location.isDefault && ' (default)'}
           </p>
         )}

@@ -85,15 +85,16 @@ jobs:
       app-version: ${{ needs.release.outputs.version }}
 
   notify:
-    name: Notify on Release Check Failure
-    needs: [ci]
-    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    name: Notify Release Status
+    needs: [ci, release, publish]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send Telegram notification
+      - name: Send Telegram release-status notification
         uses: pixpilot/notify-action@v1
         with:
-          status: ${{ contains(needs.*.result, 'failure') && 'failure' || 'cancelled' }}
+          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
+          notify-on: any
           telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}

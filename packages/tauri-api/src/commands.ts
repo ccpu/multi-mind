@@ -61,7 +61,7 @@ export async function browseSettingsLocation(
   defaultPath?: string,
 ): Promise<string | null> {
   const chosen = await open({
-    title: 'Choose a folder for the settings file',
+    title: 'Choose a data folder',
     directory: true,
     multiple: false,
     // Only sent when there is one: the picker takes a folder to start in, not

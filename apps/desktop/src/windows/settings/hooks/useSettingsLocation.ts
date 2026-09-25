@@ -128,7 +128,7 @@ export function useSettingsLocation(): UseSettingsLocationResult {
             tone: 'success',
             message: adopted
               ? 'Now using the settings file that was already in that folder.'
-              : 'The settings file has been moved to that folder.',
+              : 'Your data has been moved to that folder.',
           });
           return;
         }
@@ -139,8 +139,8 @@ export function useSettingsLocation(): UseSettingsLocationResult {
         });
       })
       .catch((error: unknown) => {
-        console.error('Failed to move the settings file:', error);
-        setStatus({ tone: 'error', message: 'The settings file could not be moved.' });
+        console.error('Failed to move the data folder:', error);
+        setStatus({ tone: 'error', message: 'Your data could not be moved.' });
       })
       .finally(() => {
         setBusy(false);
