@@ -8,7 +8,6 @@ import App from '../src/windows/main/App';
 
 const settingsGet = vi.fn<() => Promise<AppSettings>>();
 const settingsSave = vi.fn<(patch: Partial<AppSettings>) => Promise<AppSettings>>();
-const openWindow = vi.fn<(windowName: string) => Promise<{ success: boolean }>>();
 const newWindow = vi.fn<() => Promise<{ success: boolean; message: string }>>();
 const guestSync = vi.fn<(panes: readonly GuestPane[]) => Promise<void>>();
 const guestRun = vi.fn<(websiteId: string, script: string) => Promise<void>>();
@@ -21,7 +20,12 @@ vi.mock('@internal/tauri-api', () => ({
     invoke: {
       getSettings: async () => settingsGet(),
       saveSettings: async (patch: Partial<AppSettings>) => settingsSave(patch),
-      openWindow: async (windowName: string) => openWindow(windowName),
+      getSettingsLocation: async () => ({
+        directory: 'C:\\settings',
+        filePath: 'C:\\settings\\settings.json',
+        defaultDirectory: 'C:\\settings',
+        isDefault: true,
+      }),
       newWindow: async () => newWindow(),
       getGuestConfig: async () => ({ bridgeKey: '_bridge', findKey: '_find' }),
     },
@@ -75,7 +79,6 @@ beforeEach(() => {
   // the plain one is the one jsdom can be typed into.
   settingsGet.mockResolvedValue(stub({ promptEditor: 'plain' }));
   settingsSave.mockImplementation(async (patch) => stub(patch));
-  openWindow.mockResolvedValue({ success: true });
   newWindow.mockResolvedValue({
     success: true,
     message: 'Window "main-2" opened successfully.',
@@ -108,13 +111,13 @@ describe('main window', () => {
     expect(screen.queryByRole('button', { name: 'TexBox Size' })).not.toBeInTheDocument();
   });
 
-  it('opens the settings window from the menu strip', async () => {
+  it('opens the settings dialog from the menu strip', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: 'Settings' }));
 
-    expect(openWindow).toHaveBeenCalledWith('settings');
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
   });
 
   /*

@@ -13,6 +13,7 @@ import {
 import { appApi } from '@internal/tauri-api';
 import { cn } from '@pixpilot/shadcn';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SettingsDialog } from '../settings/SettingsDialog';
 import { MenuBar } from './components/MenuBar';
 import { PROMPT_SURFACE_SELECTOR } from './components/prompt-surface';
 import { PromptPanel } from './components/PromptPanel';
@@ -35,7 +36,6 @@ function App() {
     settings,
     loaded,
     toggleWebsite,
-    openSettings,
     togglePreset,
     addPreset,
     updatePreset,
@@ -44,6 +44,7 @@ function App() {
   const [prompt, setPrompt] = useState('');
   const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
   const [guestConfig, setGuestConfig] = useState<GuestConfig | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const promptRef = useRef<PromptEditorHandle | null>(null);
   const historyRef = useRef(new HistoryManager());
@@ -232,6 +233,8 @@ function App() {
     );
   }, []);
 
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+
   /** Typing in or clicking the prompt box takes it back to its full size. */
   const expandPrompt = useCallback(() => {
     setBottomPercent(settingsRef.current.panelButtonSize);
@@ -285,6 +288,8 @@ function App() {
         onChangePreset={updatePreset}
         onRemovePreset={removePreset}
       />
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

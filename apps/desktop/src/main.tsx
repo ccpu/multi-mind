@@ -1,5 +1,5 @@
 import { appConfig } from '@internal/configs';
-import { ThemeProvider } from '@internal/ui';
+import { OverlayProvider, ThemeProvider } from '@internal/ui';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './windows/main/App';
@@ -18,7 +18,9 @@ if (rootElement === null) {
 createRoot(rootElement).render(
   <StrictMode>
     <ThemeProvider defaultTheme={appConfig.theme.defaultTheme}>
-      <App />
+      <OverlayProvider>
+        <App />
+      </OverlayProvider>
     </ThemeProvider>
   </StrictMode>,
 );

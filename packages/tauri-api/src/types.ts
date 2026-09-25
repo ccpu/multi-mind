@@ -70,7 +70,7 @@ export interface NativeMenuEntry {
   enabled: boolean;
 }
 
-/** What {@link openWindow} answers, kept as the Electron port shaped it. */
+/** What {@link newWindow} answers, kept as the Electron port shaped it. */
 export interface OpenWindowResult {
   success: boolean;
   message: string;

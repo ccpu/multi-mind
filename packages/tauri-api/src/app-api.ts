@@ -4,7 +4,6 @@ import {
   getSettings,
   getSettingsLocation,
   newWindow,
-  openWindow,
   resetSettingsLocation,
   saveSettings,
   setSettingsLocation,
@@ -46,7 +45,6 @@ export const appApi = {
     browseSettingsLocation,
     setSettingsLocation,
     resetSettingsLocation,
-    openWindow,
     newWindow,
   },
 

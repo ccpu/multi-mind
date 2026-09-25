@@ -5,10 +5,11 @@ import type {
   SettingsLocationResult,
 } from '@internal/multi-mind';
 import { DEFAULT_SETTINGS, DEFAULT_WEBSITES } from '@internal/multi-mind';
+import { OverlayProvider } from '@internal/ui';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import App from '../src/windows/settings/App';
+import { SettingsDialog } from '../src/windows/settings/SettingsDialog';
 
 const settingsGet = vi.fn<() => Promise<AppSettings>>();
 const settingsSave = vi.fn<(patch: Partial<AppSettings>) => Promise<AppSettings>>();
@@ -59,6 +60,19 @@ vi.mock('@internal/tauri-api', () => ({
     },
   },
 }));
+
+function App() {
+  return (
+    <OverlayProvider>
+      <SettingsDialog open onOpenChange={() => undefined} />
+    </OverlayProvider>
+  );
+}
+
+/** A confirmation asked over the settings dialog. */
+async function findConfirmation(): Promise<HTMLElement> {
+  return screen.findByRole('dialog', { name: (name) => name !== 'Settings' });
+}
 
 function stub(overrides: Partial<AppSettings> = {}): AppSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
@@ -296,7 +310,7 @@ describe('settings window', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Remove site' }));
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await findConfirmation();
     await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
 
     const websites = await lastSavedWebsites();
@@ -363,7 +377,7 @@ describe('settings window', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Save location' }));
 
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await findConfirmation();
       expect(dialog).toHaveTextContent('does not exist');
       await user.click(within(dialog).getByRole('button', { name: 'Create folder' }));
 
@@ -379,7 +393,7 @@ describe('settings window', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Save location' }));
 
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await findConfirmation();
       await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
       await waitFor(() => {
@@ -397,7 +411,7 @@ describe('settings window', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Save location' }));
 
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await findConfirmation();
       expect(dialog).toHaveTextContent('already has a settings file');
       await user.click(within(dialog).getByRole('button', { name: 'Overwrite them' }));
 
@@ -418,7 +432,7 @@ describe('settings window', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Save location' }));
 
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await findConfirmation();
       await user.click(
         within(dialog).getByRole('button', { name: 'Keep those settings' }),
       );
@@ -441,7 +455,7 @@ describe('settings window', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Save location' }));
 
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await findConfirmation();
       await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
       await waitFor(() => {

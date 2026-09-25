@@ -15,7 +15,7 @@ export interface UseSettingsStoreResult {
 }
 
 /**
- * The settings window's view of `Multi Mind/Settings.cs`. Edits land in local
+ * The settings dialog's view of `Multi Mind/Settings.cs`. Edits land in local
  * state at once and are flushed to Rust shortly after, so typing in a text
  * field does not rewrite `settings.json` on every keystroke.
  */
@@ -93,7 +93,7 @@ export function useSettingsStore(): UseSettingsStoreResult {
       appApi.events.onSettingsChanged((next) => {
         // Every save comes straight back as a broadcast. Applying one while an
         // edit is still settling would undo whatever was typed in the meantime,
-        // so the window only follows changes made somewhere else.
+        // so the dialog only follows changes made somewhere else.
         if (pendingRef.current === null && inFlightRef.current === 0) {
           setSettings(next);
         }
@@ -101,7 +101,7 @@ export function useSettingsStore(): UseSettingsStoreResult {
     [],
   );
 
-  // A settling edit must not be lost to the window closing, whether that tears
+  // A settling edit must not be lost to the dialog or window closing, whether that tears
   // the renderer down or only unmounts the tree.
   useEffect(() => {
     window.addEventListener('beforeunload', flush);

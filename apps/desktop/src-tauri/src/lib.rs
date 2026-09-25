@@ -39,7 +39,6 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
-            commands::open_window,
             commands::new_window,
             settings::get_settings,
             settings::save_settings,

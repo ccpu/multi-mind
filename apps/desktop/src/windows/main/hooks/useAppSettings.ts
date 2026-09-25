@@ -15,8 +15,6 @@ export interface UseAppSettingsResult {
   /** False until the persisted settings have come back from Rust. */
   loaded: boolean;
   toggleWebsite: (websiteId: string) => void;
-  /** Raises the settings window, where everything configurable now lives. */
-  openSettings: () => void;
   /** Ticks a prompt preset on or off. */
   togglePreset: (promptId: string) => void;
   /** Adds a preset to the library. */
@@ -128,24 +126,10 @@ export function useAppSettings(): UseAppSettingsResult {
     [save],
   );
 
-  const openSettings = useCallback(() => {
-    appApi.invoke.openWindow('settings').then(
-      (result) => {
-        if (!result.success) {
-          console.error(result.message);
-        }
-      },
-      (error: unknown) => {
-        console.error('Failed to open the settings window:', error);
-      },
-    );
-  }, []);
-
   return {
     settings,
     loaded,
     toggleWebsite,
-    openSettings,
     togglePreset,
     addPreset,
     updatePreset,

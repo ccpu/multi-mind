@@ -104,17 +104,6 @@ export async function resetSettingsLocation(
 }
 
 /**
- * Raises a window by name, opening it if it is not up yet.
- *
- * `main` and `settings` are the two the app configures. Asking for one that is
- * already open focuses it rather than opening a second copy, which is what the
- * Electron port's `openWindow` did.
- */
-export async function openWindow(windowName: string): Promise<OpenWindowResult> {
-  return invoke<OpenWindowResult>('open_window', { windowName });
-}
-
-/**
  * Opens another main window — the app's answer to "run a second instance".
  *
  * A second process cannot be one: the signed-in sites live in a single browser

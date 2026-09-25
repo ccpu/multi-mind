@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.4.0",
   "private": true,
-  "description": "Multi Mind: the main window, the settings window, and the Rust backend in src-tauri/",
+  "description": "Multi Mind: the main window, its settings dialog, and the Rust backend in src-tauri/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
