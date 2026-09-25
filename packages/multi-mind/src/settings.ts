@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   promptEditor: 'markdown',
   autoUpdate: true,
   autoUpdatePrompted: false,
-  browserMemorySaving: true,
+  browserMemorySaving: false,
   disableBackForwardCache: true,
   enableLowEndDeviceMode: true,
   processPerSite: true,

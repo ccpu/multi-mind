@@ -166,25 +166,37 @@ fn configure_desktop<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Bu
          * logins already in it, and all of them sharing one browser process
          * rather than starting a second set of renderers. It is an instance in
          * the sense the user means.
+         *
+         * The window is built off this callback, never in it. On Windows the
+         * callback runs inside the `WM_COPYDATA` the second launch sends and
+         * waits on, on the main thread -- and building a webview there
+         * deadlocks WebView2, hanging every window in this process and the
+         * second launch with it. Handed to the async runtime, the callback
+         * returns at once and the build goes through the event loop like any
+         * other, which is how `new_window` already does it.
          */
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // Somewhere to cascade the new window from, if a window is up.
-            let near = app
-                .windows()
-                .into_iter()
-                .find(|(label, _)| guest::is_main_window_label(label))
-                .map(|(_, window)| window);
+            let app = app.clone();
 
-            if let Err(error) = commands::open_main_window(app, near.as_ref()) {
-                eprintln!("Failed to answer a second launch with a window: {error}");
+            tauri::async_runtime::spawn(async move {
+                // Somewhere to cascade the new window from, if a window is up.
+                let near = app
+                    .windows()
+                    .into_iter()
+                    .find(|(label, _)| guest::is_main_window_label(label))
+                    .map(|(_, window)| window);
 
-                // Better a raised window than nothing at all.
-                if let Some(window) = near {
-                    let _ = window.unminimize();
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                if let Err(error) = commands::open_main_window(&app, near.as_ref()) {
+                    eprintln!("Failed to answer a second launch with a window: {error}");
+
+                    // Better a raised window than nothing at all.
+                    if let Some(window) = near {
+                        let _ = window.unminimize();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
                 }
-            }
+            });
         }));
 
     // The updater is only registered when there is a key to check signatures

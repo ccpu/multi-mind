@@ -185,7 +185,7 @@ impl BrowserMemorySettings {
             browser_memory_saving: settings
                 .get("browserMemorySaving")
                 .and_then(Value::as_bool)
-                .unwrap_or(true),
+                .unwrap_or(false),
             disable_back_forward_cache: settings
                 .get("disableBackForwardCache")
                 .and_then(Value::as_bool)
@@ -1377,12 +1377,12 @@ mod tests {
     fn browser_memory_saving_choice_changes_only_the_next_launch_arguments() {
         assert_eq!(
             BrowserArguments::from_settings(&serde_json::json!({})).value(),
-            BROWSER_ARGS
+            STANDARD_BROWSER_ARGS
         );
         assert_eq!(
-            BrowserArguments::from_settings(&serde_json::json!({ "browserMemorySaving": false }))
+            BrowserArguments::from_settings(&serde_json::json!({ "browserMemorySaving": true }))
                 .value(),
-            STANDARD_BROWSER_ARGS
+            BROWSER_ARGS
         );
     }
 
@@ -1396,6 +1396,7 @@ mod tests {
             ("optimizeForSize", "--js-flags=--optimize-for-size"),
         ] {
             let mut settings = serde_json::Map::new();
+            settings.insert("browserMemorySaving".into(), Value::Bool(true));
             settings.insert(setting.into(), Value::Bool(false));
 
             let arguments = BrowserArguments::from_settings(&Value::Object(settings)).value();
