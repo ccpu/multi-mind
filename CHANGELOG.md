@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/ccpu/multi-mind/compare/v1.4.1...v1.5.0) (2026-09-25)
+
+
+### Features
+
+* **settings:** introduce DataFolderCard component and update settings location terminology ([ffe0691](https://github.com/ccpu/multi-mind/commit/ffe069175476679562b1d5bfcbe9b8b5bf68267c))
+
 ## [1.4.1](https://github.com/ccpu/multi-mind/compare/v1.4.0...v1.4.1) (2026-09-25)
 
 
