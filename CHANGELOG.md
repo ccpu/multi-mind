@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/ccpu/multi-mind/compare/v1.4.0...v1.4.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **settings:** update default browser memory saving setting ([26b5fba](https://github.com/ccpu/multi-mind/commit/26b5fba88f22a0883bb136e3d9c5f940eec5a88a))
+
 # [1.4.0](https://github.com/ccpu/multi-mind/compare/v1.3.0...v1.4.0) (2026-09-24)
 
 
