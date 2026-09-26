@@ -1,6 +1,6 @@
 [package]
 name = "multi-mind"
-version = "1.8.0"
+version = "1.9.0"
 description = "One prompt, many AI chat sites side by side"
 authors = ["Mo Doaie <m.doaie@hotmail.com>"]
 edition = "2021"

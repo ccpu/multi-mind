@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/ccpu/multi-mind/compare/v1.8.0...v1.9.0) (2026-09-26)
+
+
+### Features
+
+* **prompt:** enhance PromptPreset functionality and UI ([56b69bf](https://github.com/ccpu/multi-mind/commit/56b69bff98f8d419c116bb2ea70002089aaad65f))
+
 # [1.8.0](https://github.com/ccpu/multi-mind/compare/v1.7.0...v1.8.0) (2026-09-26)
 
 
