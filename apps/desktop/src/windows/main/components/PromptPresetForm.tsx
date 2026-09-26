@@ -5,9 +5,9 @@ import type {
 } from '@internal/multi-mind';
 import type { Select as SelectComponent } from '@pixpilot/shadcn-ui';
 import type { ChangeEvent, ComponentProps } from 'react';
-import { PROMPT_LOCATION_OPTIONS } from '@internal/multi-mind';
+import { PROMPT_LOCATION_OPTIONS, promptPresetLabel } from '@internal/multi-mind';
 import { Label, Switch, Textarea } from '@pixpilot/shadcn';
-import { Button, Input, Select } from '@pixpilot/shadcn-ui';
+import { Button, Input, Select, showConfirmDialog } from '@pixpilot/shadcn-ui';
 import { Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { promptSurface } from './prompt-surface';
@@ -131,12 +131,22 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
   );
 
   const handleRemove = useCallback(() => {
-    if (saveTimerRef.current !== null) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    onRemove();
-  }, [onRemove]);
+    showConfirmDialog({
+      title: `Delete ${promptPresetLabel({ ...preset, ...draftRef.current })}?`,
+      description: 'This prompt will be permanently deleted. This cannot be undone.',
+      confirmText: 'Delete permanently',
+      variant: 'destructive',
+      onConfirm: () => {
+        if (saveTimerRef.current !== null) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        onRemove();
+      },
+    }).catch((error: unknown) => {
+      console.error('Failed to confirm prompt deletion:', error);
+    });
+  }, [onRemove, preset]);
 
   return (
     <div className="flex flex-col gap-3">

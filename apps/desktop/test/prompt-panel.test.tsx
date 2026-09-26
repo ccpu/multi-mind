@@ -1,6 +1,7 @@
 import type { PromptPreset } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../src/windows/main/types/prompt-editor';
+import { OverlayProvider } from '@internal/ui';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -68,7 +69,14 @@ function placeAt(element: Element, left: number, width: number): void {
 function renderPanel(overrides: Partial<PanelProps> = {}) {
   const props = panelProps(overrides);
 
-  return { ...render(<PromptPanel {...props} />), props };
+  return {
+    ...render(
+      <OverlayProvider>
+        <PromptPanel {...props} />
+      </OverlayProvider>,
+    ),
+    props,
+  };
 }
 
 describe('promptPanel', () => {
@@ -412,7 +420,7 @@ describe('promptPanel', () => {
       );
     });
 
-    it('drops a preset from the manager', async () => {
+    it('keeps a preset when permanent deletion is cancelled', async () => {
       const user = userEvent.setup();
       const { props } = renderPanel({ presets });
 
@@ -420,6 +428,33 @@ describe('promptPanel', () => {
       const manager = screen.getByRole('dialog');
       await user.click(within(manager).getByRole('button', { name: /English/u }));
       await user.click(within(manager).getByRole('button', { name: 'Delete' }));
+
+      const confirmation = await screen.findByRole('dialog', {
+        name: 'Delete English?',
+      });
+      expect(confirmation).toHaveTextContent('permanently deleted');
+      expect(props.onRemovePreset).toHaveBeenCalledWith('english');
+      await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+
+      expect(props.onRemovePreset).not.toHaveBeenCalled();
+    });
+
+    it('drops a preset from the manager after confirmation', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'Prompts' }));
+      const manager = screen.getByRole('dialog');
+      await user.click(within(manager).getByRole('button', { name: /English/u }));
+      await user.click(within(manager).getByRole('button', { name: 'Delete' }));
+
+      const confirmation = await screen.findByRole('dialog', {
+        name: 'Delete English?',
+      });
+      expect(props.onRemovePreset).not.toHaveBeenCalled();
+      await user.click(
+        within(confirmation).getByRole('button', { name: 'Delete permanently' }),
+      );
 
       expect(props.onRemovePreset).toHaveBeenCalledWith('english');
     });

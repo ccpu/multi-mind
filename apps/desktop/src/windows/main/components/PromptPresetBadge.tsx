@@ -118,7 +118,7 @@ export function PromptPresetBadge({
         </BadgeShell>
       </OverriddenTooltip>
 
-      <PopoverContent {...promptSurface} align="start" className="w-80">
+      <PopoverContent {...promptSurface} align="start" className="w-150">
         <PromptPresetForm
           key={preset.id}
           preset={preset}

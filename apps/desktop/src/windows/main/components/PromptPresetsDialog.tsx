@@ -69,7 +69,7 @@ export function PromptPresetsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent {...promptSurface} className="sm:max-w-xl">
+      <DialogContent {...promptSurface} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Prompts</DialogTitle>
           <DialogDescription>
