@@ -12,8 +12,10 @@ const newWindow = vi.fn<() => Promise<{ success: boolean; message: string }>>();
 const guestSync = vi.fn<(panes: readonly GuestPane[]) => Promise<void>>();
 const guestRun = vi.fn<(websiteId: string, script: string) => Promise<void>>();
 const guestNavigate = vi.fn<(websiteId: string, url: string) => Promise<void>>();
-const searchAddPrompt = vi.fn<(websiteId: string, prompt: string) => Promise<number>>();
-const searchUpdatePrompt =
+const searchAddPrompt = vi.fn<(prompt: string) => Promise<number>>();
+const searchAddConversation =
+  vi.fn<(promptId: number, websiteId: string) => Promise<number>>();
+const searchUpdateConversation =
   vi.fn<(id: number, title: string, url: string) => Promise<void>>();
 const searchPrompts = vi.fn<(query: string) => Promise<SearchEntry[]>>();
 const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -33,10 +35,11 @@ vi.mock('@internal/tauri-api', () => ({
       }),
       newWindow: async () => newWindow(),
       getGuestConfig: async () => ({ bridgeKey: '_bridge', findKey: '_find' }),
-      searchAddPrompt: async (websiteId: string, prompt: string) =>
-        searchAddPrompt(websiteId, prompt),
-      searchUpdatePrompt: async (id: number, title: string, url: string) =>
-        searchUpdatePrompt(id, title, url),
+      searchAddPrompt: async (prompt: string) => searchAddPrompt(prompt),
+      searchAddConversation: async (promptId: number, websiteId: string) =>
+        searchAddConversation(promptId, websiteId),
+      searchUpdateConversation: async (id: number, title: string, url: string) =>
+        searchUpdateConversation(id, title, url),
       searchPrompts: async (query: string) => searchPrompts(query),
     },
     events: {
@@ -101,7 +104,8 @@ beforeEach(() => {
   guestRun.mockResolvedValue(undefined);
   guestNavigate.mockResolvedValue(undefined);
   searchAddPrompt.mockResolvedValue(1);
-  searchUpdatePrompt.mockResolvedValue(undefined);
+  searchAddConversation.mockResolvedValue(1);
+  searchUpdateConversation.mockResolvedValue(undefined);
   searchPrompts.mockResolvedValue([]);
 });
 
@@ -111,7 +115,8 @@ describe('main window', () => {
 
     expect(screen.getByRole('button', { name: 'New Chat' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reset Layout' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More options' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument();
     expect(
       await screen.findByPlaceholderText(/Ask every enabled model/u),
@@ -128,11 +133,14 @@ describe('main window', () => {
     expect(screen.queryByRole('button', { name: 'TexBox Size' })).not.toBeInTheDocument();
   });
 
-  it('opens the settings dialog from the menu strip', async () => {
+  it('opens the settings dialog from the overflow menu', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    // Radix opens menus on pointerdown, which jsdom does not model; Enter does it.
+    screen.getByRole('button', { name: 'More options' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('menuitem', { name: 'Settings' }));
 
     expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
   });
@@ -265,7 +273,17 @@ describe('main window', () => {
       stub({
         promptEditor: 'plain',
         activeWebsites: ['claude'],
-        prompts: [{ id: 'terse', name: 'Terse', value: 'Be terse.', location: 'start' }],
+        prompts: [
+          {
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            location: 'start',
+            sendOnce: false,
+            untickOnNewChat: false,
+            overrideOthers: false,
+          },
+        ],
         activePrompts: ['terse'],
       }),
     );
@@ -281,12 +299,126 @@ describe('main window', () => {
     expect(guestRun.mock.calls[0]?.[1]).toContain('Be terse.');
   });
 
-  it('saves one searchable record per provider and updates its conversation address', async () => {
+  it('sends a send-once preset with the first prompt of a chat only', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        activeWebsites: ['claude'],
+        prompts: [
+          {
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            location: 'start',
+            sendOnce: true,
+            untickOnNewChat: false,
+            overrideOthers: false,
+          },
+        ],
+        activePrompts: ['terse'],
+      }),
+    );
+    render(<App />);
+    await waitForPanes();
+    const textbox = screen.getByPlaceholderText(/Ask every enabled model/u);
+
+    await user.type(textbox, 'first');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await user.type(textbox, 'second');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await user.click(screen.getByRole('button', { name: 'New Chat' }));
+    await user.type(textbox, 'third');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(guestRun).toHaveBeenCalledTimes(3);
+    });
+    const scripts = guestRun.mock.calls.map((call) => String(call[1]));
+    expect(scripts[0]).toContain('Be terse.');
+    expect(scripts[1]).not.toContain('Be terse.');
+    expect(scripts[2]).toContain('Be terse.');
+  });
+
+  it('sends only the overriding preset while it is ticked', async () => {
+    const user = userEvent.setup();
+    const preset = {
+      location: 'end',
+      sendOnce: false,
+      untickOnNewChat: false,
+    } as const;
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        activeWebsites: ['claude'],
+        prompts: [
+          {
+            ...preset,
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            overrideOthers: false,
+          },
+          {
+            ...preset,
+            id: 'json',
+            name: 'JSON',
+            value: 'Answer as JSON.',
+            overrideOthers: true,
+          },
+        ],
+        activePrompts: ['terse', 'json'],
+      }),
+    );
+    render(<App />);
+    await waitForPanes();
+
+    await user.type(screen.getByPlaceholderText(/Ask every enabled model/u), 'ask');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(guestRun).toHaveBeenCalledTimes(1);
+    });
+    const script = String(guestRun.mock.calls[0]?.[1]);
+    expect(script).toContain('Answer as JSON.');
+    expect(script).not.toContain('Be terse.');
+  });
+
+  it('unticks the presets that last for one chat on New Chat', async () => {
+    const user = userEvent.setup();
+    const preset = {
+      name: '',
+      value: '',
+      location: 'end',
+      sendOnce: false,
+      overrideOthers: false,
+    } as const;
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        activeWebsites: ['claude'],
+        prompts: [
+          { ...preset, id: 'chat', untickOnNewChat: true },
+          { ...preset, id: 'kept', untickOnNewChat: false },
+        ],
+        activePrompts: ['chat', 'kept'],
+      }),
+    );
+    render(<App />);
+    await waitForPanes();
+
+    await user.click(screen.getByRole('button', { name: 'New Chat' }));
+
+    expect(settingsSave).toHaveBeenCalledWith({ activePrompts: ['kept'] });
+  });
+
+  it('saves a prompt once with a conversation per provider and updates its address', async () => {
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
       stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
     );
-    searchAddPrompt.mockImplementation(async (websiteId) =>
+    searchAddPrompt.mockResolvedValue(7);
+    searchAddConversation.mockImplementation(async (_promptId, websiteId) =>
       websiteId === 'claude' ? 1 : 2,
     );
     render(<App />);
@@ -298,9 +430,11 @@ describe('main window', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => {
-      expect(searchAddPrompt).toHaveBeenCalledWith('claude', 'Compare these');
-      expect(searchAddPrompt).toHaveBeenCalledWith('chatgpt', 'Compare these');
+      expect(searchAddConversation).toHaveBeenCalledWith(7, 'claude');
+      expect(searchAddConversation).toHaveBeenCalledWith(7, 'chatgpt');
     });
+    expect(searchAddPrompt).toHaveBeenCalledTimes(1);
+    expect(searchAddPrompt).toHaveBeenCalledWith('Compare these');
 
     guestListeners.forEach((listener) =>
       listener({
@@ -309,7 +443,7 @@ describe('main window', () => {
       }),
     );
     await waitFor(() => {
-      expect(searchUpdatePrompt).toHaveBeenCalledWith(
+      expect(searchUpdateConversation).toHaveBeenCalledWith(
         2,
         'Comparison',
         'https://chatgpt.com/c/123',
@@ -330,10 +464,16 @@ describe('main window', () => {
     searchPrompts.mockResolvedValue([
       {
         id: 12,
-        websiteId: 'chatgpt',
         prompt: 'Compare these',
-        title: 'Comparison',
-        url: 'https://chatgpt.com/c/123',
+        createdAt: '2026-09-25 10:00:00',
+        conversations: [
+          {
+            id: 3,
+            websiteId: 'chatgpt',
+            title: 'Comparison',
+            url: 'https://chatgpt.com/c/123',
+          },
+        ],
       },
     ]);
     render(<App />);
@@ -355,6 +495,48 @@ describe('main window', () => {
     );
     await waitFor(() => {
       expect(guestNavigate).toHaveBeenCalledWith('chatgpt', 'https://chatgpt.com/c/123');
+    });
+  });
+
+  it('lists a prompt once with its providers and opens all or one of them', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
+    );
+    searchPrompts.mockResolvedValue([
+      {
+        id: 12,
+        prompt: 'Cache turbo in CI',
+        createdAt: '2026-09-25 10:00:00',
+        conversations: [
+          { id: 3, websiteId: 'claude', title: '', url: 'https://claude.ai/chat/1' },
+          { id: 4, websiteId: 'chatgpt', title: 'Turbo', url: 'https://chatgpt.com/c/2' },
+          { id: 5, websiteId: 'gemini', title: '', url: '' },
+        ],
+      },
+    ]);
+    render(<App />);
+    await waitForPanes();
+
+    // Focusing the empty box lists recent prompts.
+    await user.click(screen.getByRole('textbox', { name: 'Search saved prompts' }));
+    expect(await screen.findByText('Recent prompts')).toBeInTheDocument();
+    expect(searchPrompts).toHaveBeenCalledWith('');
+    expect(screen.getAllByRole('button', { name: /Cache turbo in CI/u })).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Open gemini conversation' }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Open chatgpt conversation' }));
+    await waitFor(() => {
+      expect(guestNavigate).toHaveBeenCalledWith('chatgpt', 'https://chatgpt.com/c/2');
+    });
+    expect(guestNavigate).not.toHaveBeenCalledWith('claude', 'https://claude.ai/chat/1');
+
+    await user.click(screen.getByRole('textbox', { name: 'Search saved prompts' }));
+    await user.keyboard('{Enter}');
+    await waitFor(() => {
+      expect(guestNavigate).toHaveBeenCalledWith('claude', 'https://claude.ai/chat/1');
     });
   });
 
@@ -381,7 +563,17 @@ describe('main window', () => {
       stub({
         promptEditor: 'plain',
         activeWebsites: ['claude'],
-        prompts: [{ id: 'terse', name: 'Terse', value: 'Be terse.', location: 'start' }],
+        prompts: [
+          {
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            location: 'start',
+            sendOnce: false,
+            untickOnNewChat: false,
+            overrideOthers: false,
+          },
+        ],
         activePrompts: ['terse'],
       }),
     );
@@ -415,7 +607,17 @@ describe('main window', () => {
     settingsGet.mockResolvedValue(
       stub({
         promptEditor: 'plain',
-        prompts: [{ id: 'terse', name: 'Terse', value: 'Be terse.', location: 'start' }],
+        prompts: [
+          {
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            location: 'start',
+            sendOnce: false,
+            untickOnNewChat: false,
+            overrideOthers: false,
+          },
+        ],
       }),
     );
     render(<App />);

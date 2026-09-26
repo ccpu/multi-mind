@@ -4,9 +4,13 @@ import {
   BLANK_PROMPT_PRESET,
   composePrompt,
   createPromptPreset,
+  duePrompts,
   normalizePromptPreset,
   normalizePromptPresets,
+  overridingPrompts,
+  promptOverriddenBy,
   promptPresetLabel,
+  promptsToSend,
   UNTITLED_PROMPT_NAME,
 } from '../src/prompts';
 
@@ -16,6 +20,9 @@ function preset(overrides: Partial<PromptPreset> = {}): PromptPreset {
     name: 'English',
     value: 'Answer in English.',
     location: 'end',
+    sendOnce: false,
+    untickOnNewChat: false,
+    overrideOthers: false,
     ...overrides,
   };
 }
@@ -41,11 +48,33 @@ describe('normalizePromptPreset', () => {
       name: '',
       value: 'Be terse.',
       location: BLANK_PROMPT_PRESET.location,
+      sendOnce: false,
+      untickOnNewChat: false,
+      overrideOthers: false,
     });
   });
 
   it('falls back to a side the composer knows when the stored one is junk', () => {
     expect(normalizePromptPreset({ id: 'a', location: 'middle' })?.location).toBe('end');
+  });
+
+  it('sends every time unless the settings file says to send once', () => {
+    expect(normalizePromptPreset({ id: 'a', sendOnce: 'yes' })?.sendOnce).toBe(false);
+    expect(normalizePromptPreset({ id: 'a', sendOnce: true })?.sendOnce).toBe(true);
+  });
+
+  it('stays ticked across chats unless the settings file says to untick it', () => {
+    expect(normalizePromptPreset({ id: 'a' })?.untickOnNewChat).toBe(false);
+    expect(
+      normalizePromptPreset({ id: 'a', untickOnNewChat: true })?.untickOnNewChat,
+    ).toBe(true);
+  });
+
+  it('leaves the other prompts alone unless the settings file says to override them', () => {
+    expect(normalizePromptPreset({ id: 'a' })?.overrideOthers).toBe(false);
+    expect(normalizePromptPreset({ id: 'a', overrideOthers: true })?.overrideOthers).toBe(
+      true,
+    );
   });
 
   it('rejects an entry that is not an object', () => {
@@ -77,6 +106,65 @@ describe('promptPresetLabel', () => {
 
   it('is the name otherwise', () => {
     expect(promptPresetLabel(preset())).toBe('English');
+  });
+});
+
+describe('promptsToSend', () => {
+  const alone = preset({ id: 'alone', overrideOthers: true });
+  const other = preset({ id: 'other' });
+
+  it('sends every ticked preset while none overrides the rest', () => {
+    expect(overridingPrompts([other])).toStrictEqual([]);
+    expect(promptsToSend([other])).toStrictEqual([other]);
+  });
+
+  it('sends only the overriding preset while it is ticked', () => {
+    expect(overridingPrompts([other, alone])).toStrictEqual([alone]);
+    expect(promptsToSend([other, alone])).toStrictEqual([alone]);
+  });
+
+  it('sends every overriding preset together when several are ticked', () => {
+    const second = preset({ id: 'second', overrideOthers: true });
+
+    expect(promptsToSend([alone, other, second])).toStrictEqual([alone, second]);
+  });
+});
+
+describe('promptOverriddenBy', () => {
+  const alone = preset({ id: 'alone', overrideOthers: true });
+
+  it('names the presets leaving another one out', () => {
+    expect(promptOverriddenBy(preset(), [alone])).toStrictEqual([alone]);
+  });
+
+  it('is empty for an overriding preset itself', () => {
+    expect(promptOverriddenBy(alone, [alone])).toStrictEqual([]);
+  });
+
+  it('is empty while nothing overrides', () => {
+    expect(promptOverriddenBy(preset(), [])).toStrictEqual([]);
+  });
+});
+
+describe('duePrompts', () => {
+  it('drops a send-once preset once it has gone out', () => {
+    const presets = [preset({ id: 'once', sendOnce: true }), preset()];
+
+    expect(duePrompts(presets, new Set(['once'])).map(({ id }) => id)).toStrictEqual([
+      'english',
+    ]);
+  });
+
+  it('keeps a send-once preset that has not gone out yet', () => {
+    const presets = [preset({ id: 'once', sendOnce: true })];
+
+    expect(duePrompts(presets, new Set())).toStrictEqual(presets);
+  });
+
+  it('keeps every other preset, whatever went out before', () => {
+    const presets = [preset()];
+
+    expect(duePrompts(presets, new Set(['english']))).toStrictEqual(presets);
   });
 });
 

@@ -23,7 +23,12 @@ import {
   guestSync,
   guestUrl,
 } from './guest';
-import { searchAddPrompt, searchPrompts, searchUpdatePrompt } from './search';
+import {
+  searchAddConversation,
+  searchAddPrompt,
+  searchPrompts,
+  searchUpdateConversation,
+} from './search';
 
 /**
  * The whole bridge, as one object.
@@ -48,7 +53,8 @@ export const appApi = {
     resetSettingsLocation,
     newWindow,
     searchAddPrompt,
-    searchUpdatePrompt,
+    searchAddConversation,
+    searchUpdateConversation,
     searchPrompts,
   },
 

@@ -12,6 +12,24 @@ const OVERLAY_SELECTOR = [
 ].join(',');
 
 /**
+ * Marks floating content placed so that it never reaches the browser row, and
+ * so can show without the browsers being taken out of the way.
+ */
+const CLEAR_OF_BROWSERS_ATTRIBUTE = 'data-clear-of-browsers';
+
+const CLEAR_OF_BROWSERS_SELECTOR = `[${CLEAR_OF_BROWSERS_ATTRIBUTE}]`;
+
+/** Spread onto floating content that stays clear of the browsers. */
+export const clearOfBrowsers = { [CLEAR_OF_BROWSERS_ATTRIBUTE]: '' } as const;
+
+function coversBrowsers(overlay: Element): boolean {
+  return (
+    !overlay.matches(CLEAR_OF_BROWSERS_SELECTOR) &&
+    overlay.querySelector(CLEAR_OF_BROWSERS_SELECTOR) === null
+  );
+}
+
+/**
  * Whether anything is currently floating over the window.
  *
  * An embedded browser is a native child webview, which means it is drawn over
@@ -27,7 +45,10 @@ export function useOverlayPresence(): boolean {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const check = () => setOpen(document.querySelector(OVERLAY_SELECTOR) !== null);
+    const check = () =>
+      setOpen(
+        Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some(coversBrowsers),
+      );
 
     const observer = new MutationObserver(check);
     observer.observe(document.body, { childList: true, subtree: true });

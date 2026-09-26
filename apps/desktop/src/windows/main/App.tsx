@@ -1,15 +1,17 @@
 import type { GuestConfig } from '@internal/multi-mind';
-import type { SearchEntry } from '@internal/tauri-api';
+import type { SearchConversation } from '@internal/tauri-api';
 import type { PromptEditorHandle } from './types/prompt-editor';
 import {
   composePrompt,
   createRunPromptScript,
+  duePrompts,
   getActivePrompts,
   getActiveWebsites,
   getBottomPanelPercent,
   getForcedBottomPanelPercent,
   getMenuWebsites,
   HistoryManager,
+  promptsToSend,
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
 import { cn } from '@pixpilot/shadcn';
@@ -38,8 +40,10 @@ function App() {
     settings,
     loaded,
     toggleWebsite,
-    openWebsite,
+    openWebsites,
     togglePreset,
+    untickChatPresets,
+    movePreset,
     addPreset,
     updatePreset,
     removePreset,
@@ -51,6 +55,8 @@ function App() {
 
   const promptRef = useRef<PromptEditorHandle | null>(null);
   const historyRef = useRef(new HistoryManager());
+  /** Send-once presets that already went out in this chat. */
+  const sentOnceRef = useRef(new Set<string>());
 
   // Latest values for callbacks that must stay referentially stable, so that
   // re-measuring a pane never re-runs anything that depends on them.
@@ -168,23 +174,39 @@ function App() {
    * A ticked preset is a prompt in its own right, so an empty box is no
    * reason not to send: what has to be there is the composed text, not the
    * typed text.
+   *
+   * A send-once preset goes out with the first prompt of a chat and is left
+   * off after that, until **New Chat** starts another one. A ticked
+   * overriding preset leaves the other ticked ones out altogether.
    */
   const runPrompt = useCallback(() => {
     const typedPrompt = promptTextRef.current;
     const guestGlobals = guestConfigRef.current;
-    const composed = composePrompt(typedPrompt, getActivePrompts(settingsRef.current));
+    const presets = duePrompts(
+      promptsToSend(getActivePrompts(settingsRef.current)),
+      sentOnceRef.current,
+    );
+    const composed = composePrompt(typedPrompt, presets);
 
     if (composed === '' || guestGlobals === null) {
       return;
     }
 
-    getActiveWebsites(settingsRef.current).forEach((website) => {
-      const savePrompt = recordPrompt(website.id, composed);
+    presets
+      .filter((preset) => preset.sendOnce)
+      .forEach((preset) => sentOnceRef.current.add(preset.id));
+
+    const websites = getActiveWebsites(settingsRef.current);
+    const savePrompt = recordPrompt(
+      composed,
+      websites.map((website) => website.id),
+    );
+    websites.forEach((website) => {
       appApi.guest
         .run(website.id, createRunPromptScript(website, composed, guestGlobals))
         .then(
           () => {
-            savePrompt().catch((error: unknown) => {
+            savePrompt(website.id).catch((error: unknown) => {
               console.error(`Failed to save prompt history for ${website.name}:`, error);
             });
           },
@@ -204,27 +226,35 @@ function App() {
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
   }, [recordPrompt]);
 
-  const openSearchResult = useCallback(
-    (entry: SearchEntry) => {
-      if (!/^https?:\/\//iu.test(entry.url)) {
-        return;
-      }
-      stopTracking(entry.websiteId);
-      openUrl(entry.websiteId, entry.url);
-      openWebsite(entry.websiteId);
+  /** Reopens saved conversations, enabling and opening their providers first. */
+  const openConversations = useCallback(
+    (conversations: readonly SearchConversation[]) => {
+      const openable = conversations.filter((conversation) =>
+        /^https?:\/\//iu.test(conversation.url),
+      );
+      openable.forEach((conversation) => {
+        stopTracking(conversation.websiteId);
+        openUrl(conversation.websiteId, conversation.url);
+      });
+      openWebsites(openable.map((conversation) => conversation.websiteId));
     },
-    [openUrl, openWebsite, stopTracking],
+    [openUrl, openWebsites, stopTracking],
   );
 
-  /** Port of `WebViewManager.Reload`. */
+  /**
+   * Port of `WebViewManager.Reload`. A new chat makes every send-once preset
+   * due again, and unticks the presets that only last for one chat.
+   */
   const handleReload = useCallback(() => {
+    sentOnceRef.current.clear();
+    untickChatPresets();
     getActiveWebsites(settingsRef.current).forEach((website) => {
       stopTracking(website.id);
       appApi.guest.navigate(website.id, website.url).catch((error: unknown) => {
         console.error(`Failed to reload ${website.name}:`, error);
       });
     });
-  }, [stopTracking]);
+  }, [stopTracking, untickChatPresets]);
 
   const goLastPrompt = useCallback(() => {
     historyRef.current.previous();
@@ -274,12 +304,10 @@ function App() {
         activeWebsites={settings.activeWebsites}
         onReload={handleReload}
         onResetLayout={resetLayout}
-        onLastPrompt={goLastPrompt}
-        onNextPrompt={goNextPrompt}
         onToggleWebsite={toggleWebsite}
         onOpenSettings={openSettings}
         onNewWindow={openNewWindow}
-        onOpenResult={openSearchResult}
+        onOpenConversations={openConversations}
       />
 
       <div
@@ -312,6 +340,7 @@ function App() {
         onNextPrompt={goNextPrompt}
         onDismiss={collapsePrompt}
         onTogglePreset={togglePreset}
+        onMovePreset={movePreset}
         onAddPreset={addPreset}
         onChangePreset={updatePreset}
         onRemovePreset={removePreset}

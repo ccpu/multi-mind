@@ -28,6 +28,24 @@ export interface PromptPreset {
   readonly value: string;
   /** Which side of the typed prompt {@link value} goes on. */
   readonly location: PromptLocation;
+  /**
+   * Whether the preset goes out with the first prompt of a chat only. The
+   * sites keep the conversation, so a standing instruction needs saying once;
+   * **New Chat** is what makes it due again.
+   */
+  readonly sendOnce: boolean;
+  /**
+   * Whether **New Chat** unticks the preset, so it only lasts for the chat it
+   * was ticked in. This is about whether it stays ticked, not about which
+   * messages carry it; that is {@link sendOnce}.
+   */
+  readonly untickOnNewChat: boolean;
+  /**
+   * Whether ticking the preset leaves every other ticked preset out, so it is
+   * the only one that joins the prompt. The others stay ticked, and go back
+   * to joining it once this one is unticked.
+   */
+  readonly overrideOthers: boolean;
 }
 
 /** The fields the editor lets the user type into. */
@@ -38,6 +56,9 @@ export const BLANK_PROMPT_PRESET: PromptPresetDraft = {
   name: '',
   value: '',
   location: 'end',
+  sendOnce: false,
+  untickOnNewChat: false,
+  overrideOthers: false,
 };
 
 /** What the badge and the manager show for a preset with no name yet. */
@@ -72,6 +93,18 @@ export function normalizePromptPreset(value: unknown): PromptPreset | null {
     location: isPromptLocation(source.location)
       ? source.location
       : BLANK_PROMPT_PRESET.location,
+    sendOnce:
+      typeof source.sendOnce === 'boolean'
+        ? source.sendOnce
+        : BLANK_PROMPT_PRESET.sendOnce,
+    untickOnNewChat:
+      typeof source.untickOnNewChat === 'boolean'
+        ? source.untickOnNewChat
+        : BLANK_PROMPT_PRESET.untickOnNewChat,
+    overrideOthers:
+      typeof source.overrideOthers === 'boolean'
+        ? source.overrideOthers
+        : BLANK_PROMPT_PRESET.overrideOthers,
   };
 }
 
@@ -93,6 +126,44 @@ export function normalizePromptPresets(value: unknown): PromptPreset[] {
 
     return presets;
   }, []);
+}
+
+/** The ticked presets that leave the rest out. */
+export function overridingPrompts(ticked: readonly PromptPreset[]): PromptPreset[] {
+  return ticked.filter((preset) => preset.overrideOthers);
+}
+
+/**
+ * The ticked presets that join the prompt: only the overriding ones while any
+ * is ticked, and every ticked preset otherwise. Several overriding presets
+ * ticked at once all go out together.
+ */
+export function promptsToSend(ticked: readonly PromptPreset[]): PromptPreset[] {
+  const overriding = overridingPrompts(ticked);
+
+  return overriding.length > 0 ? overriding : [...ticked];
+}
+
+/**
+ * Which of `overriding` leave `preset` out, so the badge row can name them.
+ * Empty when `preset` is one of them, or when nothing overrides.
+ */
+export function promptOverriddenBy(
+  preset: PromptPreset,
+  overriding: readonly PromptPreset[],
+): PromptPreset[] {
+  return overriding.some((entry) => entry.id === preset.id) ? [] : [...overriding];
+}
+
+/**
+ * The ticked presets still due in this chat: a send-once preset drops out
+ * once its id is in `sent`, and every other preset goes out every time.
+ */
+export function duePrompts(
+  presets: readonly PromptPreset[],
+  sent: ReadonlySet<string>,
+): PromptPreset[] {
+  return presets.filter((preset) => !preset.sendOnce || !sent.has(preset.id));
 }
 
 /**

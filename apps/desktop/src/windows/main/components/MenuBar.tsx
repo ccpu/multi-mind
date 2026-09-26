@@ -1,23 +1,13 @@
 import type { WebsiteInfo } from '@internal/multi-mind';
-import type { SearchEntry } from '@internal/tauri-api';
-import { Logo } from '@internal/ui';
+import type { SearchConversation } from '@internal/tauri-api';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@pixpilot/shadcn';
 import { Button, ToggleButton } from '@pixpilot/shadcn-ui';
-import {
-  Columns3,
-  Copy,
-  History,
-  MessageCircle,
-  Redo2,
-  Settings,
-  Undo2,
-} from 'lucide-react';
+import { Columns3, Copy, EllipsisVertical, MessageCircle, Settings } from 'lucide-react';
 import { SearchHistory } from './search/SearchHistory';
 
 interface MenuBarProps {
@@ -29,13 +19,12 @@ interface MenuBarProps {
   activeWebsites: readonly string[];
   onReload: () => void;
   onResetLayout: () => void;
-  onLastPrompt: () => void;
-  onNextPrompt: () => void;
   onToggleWebsite: (websiteId: string) => void;
   onOpenSettings: () => void;
   /** Opens another copy of this window, signed in to the same sites. */
   onNewWindow: () => void;
-  onOpenResult: (entry: SearchEntry) => void;
+  /** Reopens saved conversations picked in the search box. */
+  onOpenConversations: (conversations: readonly SearchConversation[]) => void;
 }
 
 /**
@@ -50,60 +39,47 @@ export function MenuBar({
   activeWebsites,
   onReload,
   onResetLayout,
-  onLastPrompt,
-  onNextPrompt,
   onToggleWebsite,
   onOpenSettings,
   onNewWindow,
-  onOpenResult,
+  onOpenConversations,
 }: MenuBarProps) {
   return (
-    <header className="flex h-10 shrink-0 items-center gap-1 border-b bg-background px-2 select-none">
-      <Logo className="size-5 shrink-0 text-muted-foreground" />
-      <Button variant="ghost" size="sm" onClick={onReload}>
-        <MessageCircle />
-        New Chat
-      </Button>
+    <header className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-background px-2 select-none">
+      <div className="flex min-w-0 items-center gap-1">
+        {/* `modal={false}` so closing the menu does not fight the settings dialog for focus. */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="More options">
+              <EllipsisVertical />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            <DropdownMenuItem onSelect={onOpenSettings}>
+              <Settings />
+              Settings
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
-            <History />
-            History
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuItem onSelect={onLastPrompt}>
-            <Undo2 />
-            Last Prompt
-            <DropdownMenuShortcut>ctrl+shift+z</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onNextPrompt}>
-            <Redo2 />
-            Next Propmt
-            <DropdownMenuShortcut>ctrl+shift+y</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <Button variant="ghost" size="sm" onClick={onReload}>
+          <MessageCircle />
+          New Chat
+        </Button>
 
-      <Button variant="ghost" size="sm" onClick={onResetLayout}>
-        <Columns3 />
-        Reset Layout
-      </Button>
-      <Button variant="ghost" size="sm" onClick={onNewWindow}>
-        <Copy />
-        New Window
-      </Button>
-      <Button variant="ghost" size="sm" onClick={onOpenSettings}>
-        <Settings />
-        Settings
-      </Button>
+        <Button variant="ghost" size="sm" onClick={onResetLayout}>
+          <Columns3 />
+          Reset Layout
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onNewWindow}>
+          <Copy />
+          New Window
+        </Button>
+      </div>
 
-      <div className="flex-1" />
+      <SearchHistory websites={allWebsites} onOpenConversations={onOpenConversations} />
 
-      <SearchHistory websites={allWebsites} onOpenResult={onOpenResult} />
-
-      <div className="flex items-center gap-1">
+      <div className="flex min-w-0 items-center justify-end gap-1">
         {websites.map((website) => {
           const label = website.name === '' ? '(unnamed)' : website.name.toUpperCase();
 

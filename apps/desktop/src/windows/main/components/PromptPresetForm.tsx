@@ -6,7 +6,7 @@ import type {
 import type { Select as SelectComponent } from '@pixpilot/shadcn-ui';
 import type { ChangeEvent, ComponentProps } from 'react';
 import { PROMPT_LOCATION_OPTIONS } from '@internal/multi-mind';
-import { Label, Textarea } from '@pixpilot/shadcn';
+import { Label, Switch, Textarea } from '@pixpilot/shadcn';
 import { Button, Input, Select } from '@pixpilot/shadcn-ui';
 import { Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -26,6 +26,32 @@ const LOCATION_SELECT_OPTIONS = PROMPT_LOCATION_OPTIONS.map((option) => ({
 const LOCATION_CONTENT_PROPS = promptSurface as NonNullable<
   ComponentProps<typeof SelectComponent>['contentProps']
 >;
+
+interface PresetSwitchProps {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+function PresetSwitch({
+  id,
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: PresetSwitchProps) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={id}>{label}</Label>
+        <span className="text-xs text-muted-foreground">{description}</span>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
 
 interface PromptPresetFormProps {
   preset: PromptPreset;
@@ -51,6 +77,9 @@ export function PromptPresetForm({
   const [name, setName] = useState(preset.name);
   const [value, setValue] = useState(preset.value);
   const [location, setLocation] = useState<PromptLocation>(preset.location);
+  const [sendOnce, setSendOnce] = useState(preset.sendOnce);
+  const [untickOnNewChat, setUntickOnNewChat] = useState(preset.untickOnNewChat);
+  const [overrideOthers, setOverrideOthers] = useState(preset.overrideOthers);
 
   const handleChangeName = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => setName(event.target.value),
@@ -68,8 +97,8 @@ export function PromptPresetForm({
   );
 
   const handleSave = useCallback(
-    () => onSave({ name, value, location }),
-    [location, name, onSave, value],
+    () => onSave({ name, value, location, sendOnce, untickOnNewChat, overrideOthers }),
+    [location, name, onSave, overrideOthers, sendOnce, untickOnNewChat, value],
   );
 
   return (
@@ -106,6 +135,30 @@ export function PromptPresetForm({
           onChange={handleChangeLocation}
         />
       </div>
+
+      <PresetSwitch
+        id={`${preset.id}-send-once`}
+        label="First message only"
+        description="Added to the first message of a chat; the messages after it go without. New Chat adds it again."
+        checked={sendOnce}
+        onCheckedChange={setSendOnce}
+      />
+
+      <PresetSwitch
+        id={`${preset.id}-untick-on-new-chat`}
+        label="Untick on New Chat"
+        description="Stays ticked for this chat only. New Chat unticks it; tick it again to use it in the next chat."
+        checked={untickOnNewChat}
+        onCheckedChange={setUntickOnNewChat}
+      />
+
+      <PresetSwitch
+        id={`${preset.id}-override-others`}
+        label="Override other prompts"
+        description="While this is ticked, it is the only prompt added. The other ticked prompts are greyed out and left out until you untick it."
+        checked={overrideOthers}
+        onCheckedChange={setOverrideOthers}
+      />
 
       <div className="flex items-center gap-2">
         <Button

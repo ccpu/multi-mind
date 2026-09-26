@@ -5,9 +5,10 @@ import type {
 } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../types/prompt-editor';
+import { overridingPrompts } from '@internal/multi-mind';
 import { Button } from '@pixpilot/shadcn-ui';
 import { Library, SendHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useThirdClickHandler } from '../hooks/useThirdClickHandler';
 import { MarkdownPromptEditor } from './MarkdownPromptEditor';
 import { PlainPromptEditor } from './PlainPromptEditor';
@@ -35,6 +36,7 @@ interface PromptPanelProps {
   onNextPrompt: () => void;
   onDismiss: () => void;
   onTogglePreset: (promptId: string) => void;
+  onMovePreset: (activeId: string, overId: string) => void;
   onAddPreset: (preset: PromptPreset) => void;
   onChangePreset: (promptId: string, draft: PromptPresetDraft) => void;
   onRemovePreset: (promptId: string) => void;
@@ -60,6 +62,7 @@ export function PromptPanel({
   onNextPrompt,
   onDismiss,
   onTogglePreset,
+  onMovePreset,
   onAddPreset,
   onChangePreset,
   onRemovePreset,
@@ -69,6 +72,11 @@ export function PromptPanel({
   const openManager = useCallback(() => setManagerOpen(true), []);
   const selectAll = useCallback(() => editorRef.current?.selectAll(), [editorRef]);
   const handleThirdClick = useThirdClickHandler(selectAll);
+  const overriding = useMemo(
+    () =>
+      overridingPrompts(presets.filter((preset) => activePrompts.includes(preset.id))),
+    [activePrompts, presets],
+  );
 
   /*
    * The gesture is counted on the wrapper rather than on the editor: EasyMDE
@@ -107,7 +115,9 @@ export function PromptPanel({
         <PromptPresetBar
           presets={presets}
           activePrompts={activePrompts}
+          overriding={overriding}
           onToggle={onTogglePreset}
+          onMove={onMovePreset}
           onChange={onChangePreset}
           onRemove={onRemovePreset}
         />
@@ -137,6 +147,7 @@ export function PromptPanel({
         onOpenChange={setManagerOpen}
         presets={presets}
         activePrompts={activePrompts}
+        overriding={overriding}
         onAdd={onAddPreset}
         onToggle={onTogglePreset}
         onChange={onChangePreset}

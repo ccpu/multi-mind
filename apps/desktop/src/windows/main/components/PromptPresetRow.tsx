@@ -3,11 +3,14 @@ import { PROMPT_LOCATION_OPTIONS, promptPresetLabel } from '@internal/multi-mind
 import { Checkbox, cn } from '@pixpilot/shadcn';
 import { ChevronRight } from 'lucide-react';
 import { useCallback } from 'react';
+import { OverriddenTooltip } from './OverriddenTooltip';
 import { PromptPresetForm } from './PromptPresetForm';
 
 interface PromptPresetRowProps {
   preset: PromptPreset;
   checked: boolean;
+  /** The ticked presets leaving this one out; empty when nothing does. */
+  overriddenBy: readonly PromptPreset[];
   expanded: boolean;
   onToggleExpanded: (promptId: string) => void;
   onToggle: (promptId: string) => void;
@@ -26,6 +29,7 @@ function locationLabel(preset: PromptPreset): string {
 export function PromptPresetRow({
   preset,
   checked,
+  overriddenBy,
   expanded,
   onToggleExpanded,
   onToggle,
@@ -53,31 +57,38 @@ export function PromptPresetRow({
 
   return (
     <li className="overflow-hidden rounded-md border bg-card">
-      <div className="flex items-center gap-2 p-2">
-        <Checkbox
-          checked={checked}
-          aria-label={`Use ${label}`}
-          onCheckedChange={handleToggle}
-        />
-
-        <button
-          type="button"
-          aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left"
-          onClick={handleToggleExpanded}
+      <OverriddenTooltip overriddenBy={overriddenBy}>
+        <div
+          className={cn(
+            'flex items-center gap-2 p-2',
+            overriddenBy.length > 0 && 'opacity-50',
+          )}
         >
-          <ChevronRight
-            className={cn(
-              'size-4 shrink-0 transition-transform',
-              expanded && 'rotate-90',
-            )}
+          <Checkbox
+            checked={checked}
+            aria-label={`Use ${label}`}
+            onCheckedChange={handleToggle}
           />
-          <span className="shrink-0 text-sm font-medium">{label}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {preset.value === '' ? locationLabel(preset) : preset.value}
-          </span>
-        </button>
-      </div>
+
+          <button
+            type="button"
+            aria-expanded={expanded}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left"
+            onClick={handleToggleExpanded}
+          >
+            <ChevronRight
+              className={cn(
+                'size-4 shrink-0 transition-transform',
+                expanded && 'rotate-90',
+              )}
+            />
+            <span className="shrink-0 text-sm font-medium">{label}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {preset.value === '' ? locationLabel(preset) : preset.value}
+            </span>
+          </button>
+        </div>
+      </OverriddenTooltip>
 
       {expanded && (
         <div className="border-t bg-muted/40 p-3">

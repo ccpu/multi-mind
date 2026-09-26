@@ -8,12 +8,14 @@ import {
   getActivePrompts,
   getActiveWebsites,
   getMenuWebsites,
+  movePrompt,
   moveWebsite,
   normalizeSettings,
   removePrompt,
   removeWebsite,
   togglePrompt,
   toggleWebsite,
+  untickChatPrompts,
   updatePrompt,
   updateWebsite,
 } from '../src/settings';
@@ -260,6 +262,9 @@ describe('prompt presets', () => {
     name: 'English',
     value: 'Answer in English.',
     location: 'end',
+    sendOnce: false,
+    untickOnNewChat: false,
+    overrideOthers: false,
   };
 
   const terse: PromptPreset = {
@@ -267,6 +272,9 @@ describe('prompt presets', () => {
     name: 'Terse',
     value: 'Be terse.',
     location: 'start',
+    sendOnce: false,
+    untickOnNewChat: false,
+    overrideOthers: false,
   };
 
   function withPrompts(activePrompts: string[] = []): AppSettings {
@@ -302,12 +310,38 @@ describe('prompt presets', () => {
     ]);
   });
 
+  it('unticks only the presets set to last for one chat on New Chat', () => {
+    const settings = {
+      ...withPrompts(['terse', 'english']),
+      prompts: [english, { ...terse, untickOnNewChat: true }],
+    };
+
+    expect(untickChatPrompts(settings).activePrompts).toStrictEqual(['english']);
+  });
+
+  it('moves the dragged preset onto the position it was dropped on', () => {
+    expect(movePrompt(withPrompts(), 'terse', 'english').prompts).toStrictEqual([
+      terse,
+      english,
+    ]);
+  });
+
+  it('leaves the library alone for a drop in place or an unknown id', () => {
+    const settings = withPrompts();
+
+    expect(movePrompt(settings, 'terse', 'terse')).toBe(settings);
+    expect(movePrompt(settings, 'nope', 'english')).toBe(settings);
+  });
+
   it('appends a new preset to the library', () => {
     const added = addPrompt(withPrompts(), {
       id: 'json',
       name: 'JSON',
       value: 'Answer as JSON.',
       location: 'end',
+      sendOnce: false,
+      untickOnNewChat: false,
+      overrideOthers: false,
     });
 
     expect(added.prompts.map((prompt) => prompt.id)).toStrictEqual([

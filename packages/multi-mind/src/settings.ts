@@ -247,27 +247,38 @@ export function removeWebsite(settings: AppSettings, websiteId: string): AppSett
 }
 
 /**
- * Moves the dragged site to the position of the one it was dropped on, which is
- * the reorder a `@dnd-kit` sortable list asks for. An id that is not in the
- * catalogue leaves the order alone.
+ * Moves the dragged entry to the position of the one it was dropped on, which
+ * is the reorder a `@dnd-kit` sortable list asks for. `null` when there is
+ * nothing to move: an id that is not in the list, or a drop in place.
  */
+function moveById<T extends { readonly id: string }>(
+  list: readonly T[],
+  activeId: string,
+  overId: string,
+): T[] | null {
+  const from = list.findIndex((entry) => entry.id === activeId);
+  const to = list.findIndex((entry) => entry.id === overId);
+
+  if (from === -1 || to === -1 || from === to) {
+    return null;
+  }
+
+  const moved = [...list];
+  const [entry] = moved.splice(from, 1);
+  moved.splice(to, 0, entry!);
+
+  return moved;
+}
+
+/** Reorders the catalogue by drag and drop; see {@link moveById}. */
 export function moveWebsite(
   settings: AppSettings,
   activeId: string,
   overId: string,
 ): AppSettings {
-  const from = settings.websites.findIndex((website) => website.id === activeId);
-  const to = settings.websites.findIndex((website) => website.id === overId);
+  const websites = moveById(settings.websites, activeId, overId);
 
-  if (from === -1 || to === -1 || from === to) {
-    return settings;
-  }
-
-  const websites = [...settings.websites];
-  const [moved] = websites.splice(from, 1);
-  websites.splice(to, 0, moved!);
-
-  return { ...settings, websites };
+  return websites === null ? settings : { ...settings, websites };
 }
 
 /**
@@ -285,6 +296,34 @@ export function togglePrompt(settings: AppSettings, promptId: string): AppSettin
     : [...settings.activePrompts, promptId];
 
   return { ...settings, activePrompts };
+}
+
+/** What **New Chat** leaves ticked: everything but the presets set to untick on it. */
+export function untickChatPrompts(settings: AppSettings): AppSettings {
+  const chatOnly = new Set(
+    settings.prompts
+      .filter((prompt) => prompt.untickOnNewChat)
+      .map((prompt) => prompt.id),
+  );
+
+  return {
+    ...settings,
+    activePrompts: settings.activePrompts.filter((id) => !chatOnly.has(id)),
+  };
+}
+
+/**
+ * Reorders the prompt library by drag and drop, which is also the order the
+ * badges sit in and the order ticked presets join the prompt in.
+ */
+export function movePrompt(
+  settings: AppSettings,
+  activeId: string,
+  overId: string,
+): AppSettings {
+  const prompts = moveById(settings.prompts, activeId, overId);
+
+  return prompts === null ? settings : { ...settings, prompts };
 }
 
 /** Appends a preset to the library. */

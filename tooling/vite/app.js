@@ -14,7 +14,7 @@ const host = process.env.TAURI_DEV_HOST;
 const platform = process.env.TAURI_ENV_PLATFORM;
 const isDebugBuild = Boolean(process.env.TAURI_ENV_DEBUG);
 
-const DEV_SERVER_PORT = 1422;
+const DEV_SERVER_PORT = 14211;
 const HMR_PORT = 1421;
 
 /**

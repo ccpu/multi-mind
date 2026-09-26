@@ -2,9 +2,11 @@ import type { AppSettings, PromptPreset, PromptPresetDraft } from '@internal/mul
 import {
   addPrompt,
   DEFAULT_SETTINGS,
+  movePrompt,
   removePrompt,
   togglePrompt,
   toggleWebsite as toggleWebsiteIn,
+  untickChatPrompts,
   updatePrompt,
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
@@ -15,10 +17,14 @@ export interface UseAppSettingsResult {
   /** False until the persisted settings have come back from Rust. */
   loaded: boolean;
   toggleWebsite: (websiteId: string) => void;
-  /** Enables and opens a provider when a saved result is selected. */
-  openWebsite: (websiteId: string) => void;
+  /** Enables and opens providers when a saved result is selected. */
+  openWebsites: (websiteIds: readonly string[]) => void;
   /** Ticks a prompt preset on or off. */
   togglePreset: (promptId: string) => void;
+  /** Unticks the presets that only last for one chat, as **New Chat** does. */
+  untickChatPresets: () => void;
+  /** Moves the dragged preset to where the one it was dropped on is. */
+  movePreset: (activeId: string, overId: string) => void;
   /** Adds a preset to the library. */
   addPreset: (preset: PromptPreset) => void;
   /** Saves an edit made to one preset. */
@@ -98,21 +104,25 @@ export function useAppSettings(): UseAppSettingsResult {
     [save],
   );
 
-  const openWebsite = useCallback(
-    (websiteId: string) => {
+  /** One patch for all of them, since `settingsRef` only catches up on render. */
+  const openWebsites = useCallback(
+    (websiteIds: readonly string[]) => {
       const { current } = settingsRef;
-      const website = current.websites.find((item) => item.id === websiteId);
-      if (website === undefined) {
-        return;
-      }
+      const known = current.websites.filter((item) => websiteIds.includes(item.id));
       const patch: Partial<AppSettings> = {};
-      if (!website.enabled) {
+      if (known.some((website) => !website.enabled)) {
         patch.websites = current.websites.map((item) =>
-          item.id === websiteId ? { ...item, enabled: true } : item,
+          known.includes(item) ? { ...item, enabled: true } : item,
         );
       }
-      if (!current.activeWebsites.includes(websiteId)) {
-        patch.activeWebsites = [...current.activeWebsites, websiteId];
+      const closed = known.filter(
+        (website) => !current.activeWebsites.includes(website.id),
+      );
+      if (closed.length > 0) {
+        patch.activeWebsites = [
+          ...current.activeWebsites,
+          ...closed.map((website) => website.id),
+        ];
       }
       if (Object.keys(patch).length > 0) {
         save(patch);
@@ -124,6 +134,27 @@ export function useAppSettings(): UseAppSettingsResult {
   const togglePreset = useCallback(
     (promptId: string) => {
       save({ activePrompts: togglePrompt(settingsRef.current, promptId).activePrompts });
+    },
+    [save],
+  );
+
+  const untickChatPresets = useCallback(() => {
+    const { current } = settingsRef;
+    const { activePrompts } = untickChatPrompts(current);
+
+    if (activePrompts.length !== current.activePrompts.length) {
+      save({ activePrompts });
+    }
+  }, [save]);
+
+  const movePreset = useCallback(
+    (activeId: string, overId: string) => {
+      const { current } = settingsRef;
+      const { prompts } = movePrompt(current, activeId, overId);
+
+      if (prompts !== current.prompts) {
+        save({ prompts });
+      }
     },
     [save],
   );
@@ -155,8 +186,10 @@ export function useAppSettings(): UseAppSettingsResult {
     settings,
     loaded,
     toggleWebsite,
-    openWebsite,
+    openWebsites,
     togglePreset,
+    untickChatPresets,
+    movePreset,
     addPreset,
     updatePreset,
     removePreset,

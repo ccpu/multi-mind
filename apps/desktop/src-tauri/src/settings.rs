@@ -718,8 +718,8 @@ mod tests {
         let connection = rusqlite::Connection::open(&source).unwrap();
         connection
             .execute(
-                "INSERT INTO prompt_entries (website_id, prompt) VALUES (?1, ?2)",
-                rusqlite::params!["claude", "Keep this prompt"],
+                "INSERT INTO prompts (prompt) VALUES (?1)",
+                rusqlite::params!["Keep this prompt"],
             )
             .unwrap();
         drop(connection);
@@ -736,7 +736,7 @@ mod tests {
         let moved = rusqlite::Connection::open(target.join("search.sqlite3")).unwrap();
         let count: i64 = moved
             .query_row(
-                "SELECT COUNT(*) FROM prompt_entries WHERE prompt = 'Keep this prompt'",
+                "SELECT COUNT(*) FROM prompts WHERE prompt = 'Keep this prompt'",
                 [],
                 |row| row.get(0),
             )

@@ -1,5 +1,5 @@
 import type { PromptPreset, PromptPresetDraft } from '@internal/multi-mind';
-import { createPromptPreset } from '@internal/multi-mind';
+import { createPromptPreset, promptOverriddenBy } from '@internal/multi-mind';
 import {
   Button,
   Dialog,
@@ -20,6 +20,8 @@ interface PromptPresetsDialogProps {
   onOpenChange: (open: boolean) => void;
   presets: readonly PromptPreset[];
   activePrompts: readonly string[];
+  /** The ticked presets leaving every other one out. */
+  overriding: readonly PromptPreset[];
   onAdd: (preset: PromptPreset) => void;
   onToggle: (promptId: string) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
@@ -36,6 +38,7 @@ export function PromptPresetsDialog({
   onOpenChange,
   presets,
   activePrompts,
+  overriding,
   onAdd,
   onToggle,
   onChange,
@@ -87,6 +90,7 @@ export function PromptPresetsDialog({
                   key={preset.id}
                   preset={preset}
                   checked={activePrompts.includes(preset.id)}
+                  overriddenBy={promptOverriddenBy(preset, overriding)}
                   expanded={expandedId === preset.id}
                   onToggleExpanded={handleToggleExpanded}
                   onToggle={onToggle}

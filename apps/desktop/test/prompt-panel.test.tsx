@@ -18,6 +18,9 @@ function preset(overrides: Partial<PromptPreset> = {}): PromptPreset {
     name: 'English',
     value: 'Answer in English.',
     location: 'end',
+    sendOnce: false,
+    untickOnNewChat: false,
+    overrideOthers: false,
     ...overrides,
   };
 }
@@ -37,11 +40,29 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
     onNextPrompt: vi.fn(),
     onDismiss: vi.fn(),
     onTogglePreset: vi.fn(),
+    onMovePreset: vi.fn(),
     onAddPreset: vi.fn(),
     onChangePreset: vi.fn(),
     onRemovePreset: vi.fn(),
     ...overrides,
   };
+}
+
+/** jsdom lays nothing out, so a drag needs the boxes it is measured against. */
+function placeAt(element: Element, left: number, width: number): void {
+  const rect = {
+    x: left,
+    y: 0,
+    left,
+    top: 0,
+    right: left + width,
+    bottom: 24,
+    width,
+    height: 24,
+    toJSON: () => ({}),
+  };
+
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect);
 }
 
 function renderPanel(overrides: Partial<PanelProps> = {}) {
@@ -174,15 +195,36 @@ describe('promptPanel', () => {
       expect(screen.getByRole('checkbox', { name: 'Use Terse' })).toBeChecked();
     });
 
-    it('lays the ticked presets out first, so they are the ones that stay on the row', () => {
+    it('keeps the library order whatever is ticked', () => {
       renderPanel({ presets, activePrompts: ['terse'] });
 
       const badges = screen.getAllByRole('button', { name: /English|Terse/u });
 
       expect(badges.map((badge) => badge.textContent)).toStrictEqual([
-        'Terse',
         'English',
+        'Terse',
       ]);
+    });
+
+    it('moves a preset by dragging the badge itself, without opening its editor', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+      const name = screen.getByRole('button', { name: 'English' });
+      const english = name.parentElement!;
+      const terse = screen.getByRole('button', { name: 'Terse' }).parentElement!;
+      placeAt(english.parentElement!, 0, 500);
+      placeAt(english, 0, 60);
+      placeAt(terse, 70, 60);
+
+      await user.pointer([
+        { keys: '[MouseLeft>]', target: name, coords: { clientX: 30, clientY: 12 } },
+        { coords: { clientX: 60, clientY: 12 } },
+        { coords: { clientX: 100, clientY: 12 } },
+        { keys: '[/MouseLeft]' },
+      ]);
+
+      expect(props.onMovePreset).toHaveBeenCalledWith('english', 'terse');
+      expect(screen.queryByLabelText('Text')).not.toBeInTheDocument();
     });
 
     it('ticks a preset from its badge', async () => {
@@ -207,6 +249,9 @@ describe('promptPanel', () => {
         name: 'English',
         value: 'Answer in French.',
         location: 'end',
+        sendOnce: false,
+        untickOnNewChat: false,
+        overrideOthers: false,
       });
     });
 
@@ -223,6 +268,86 @@ describe('promptPanel', () => {
         'english',
         expect.objectContaining({ location: 'start' }),
       );
+    });
+
+    it('sets a preset to go out once per chat from the badge editor', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'English' }));
+      await user.click(screen.getByRole('switch', { name: 'First message only' }));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        'english',
+        expect.objectContaining({ sendOnce: true }),
+      );
+    });
+
+    it('sets a preset to untick on New Chat from the badge editor', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'English' }));
+      await user.click(screen.getByRole('switch', { name: 'Untick on New Chat' }));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        'english',
+        expect.objectContaining({ untickOnNewChat: true }),
+      );
+    });
+
+    it('sets a preset to override the others from the badge editor', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'English' }));
+      await user.click(screen.getByRole('switch', { name: 'Override other prompts' }));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        'english',
+        expect.objectContaining({ overrideOthers: true }),
+      );
+    });
+
+    it('greys out the other presets while an overriding one is ticked, and says why', async () => {
+      const user = userEvent.setup();
+      renderPanel({
+        presets: [
+          preset({
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            overrideOthers: true,
+          }),
+          preset(),
+        ],
+        activePrompts: ['terse', 'english'],
+      });
+
+      const english = screen.getByRole('button', { name: 'English' }).parentElement!;
+      const terse = screen.getByRole('button', { name: 'Terse' }).parentElement!;
+      expect(english).toHaveClass('opacity-50');
+      expect(terse).not.toHaveClass('opacity-50');
+
+      await user.hover(english);
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        'Not sent while “Terse” is ticked: it overrides the other prompts.',
+      );
+    });
+
+    it('greys nothing out while the overriding preset is not ticked', () => {
+      renderPanel({
+        presets: [preset({ id: 'terse', name: 'Terse', overrideOthers: true }), preset()],
+        activePrompts: ['english'],
+      });
+
+      expect(
+        screen.getByRole('button', { name: 'English' }).parentElement,
+      ).not.toHaveClass('opacity-50');
     });
 
     it('throws an in-place edit away when it is cancelled', async () => {
