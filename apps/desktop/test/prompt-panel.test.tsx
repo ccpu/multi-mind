@@ -433,7 +433,7 @@ describe('promptPanel', () => {
         name: 'Delete English?',
       });
       expect(confirmation).toHaveTextContent('permanently deleted');
-      expect(props.onRemovePreset).toHaveBeenCalledWith('english');
+      expect(props.onRemovePreset).not.toHaveBeenCalled();
       await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
 
       expect(props.onRemovePreset).not.toHaveBeenCalled();
