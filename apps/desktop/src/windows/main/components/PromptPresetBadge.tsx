@@ -70,13 +70,9 @@ export function PromptPresetBadge({
   const label = promptPresetLabel(preset);
 
   const handleToggle = useCallback(() => onToggle(preset.id), [onToggle, preset.id]);
-  const handleClose = useCallback(() => setOpen(false), []);
 
-  const handleSave = useCallback(
-    (draft: PromptPresetDraft) => {
-      onChange(preset.id, draft);
-      setOpen(false);
-    },
+  const handleChange = useCallback(
+    (draft: PromptPresetDraft) => onChange(preset.id, draft),
     [onChange, preset.id],
   );
 
@@ -126,9 +122,8 @@ export function PromptPresetBadge({
         <PromptPresetForm
           key={preset.id}
           preset={preset}
-          onSave={handleSave}
+          onChange={handleChange}
           onRemove={handleRemove}
-          onCancel={handleClose}
         />
       </PopoverContent>
     </Popover>

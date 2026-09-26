@@ -1,7 +1,7 @@
 import type { PromptPreset } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../src/windows/main/types/prompt-editor';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PromptPanel } from '../src/windows/main/components/PromptPanel';
@@ -243,16 +243,20 @@ describe('promptPanel', () => {
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.clear(screen.getByLabelText('Text'));
       await user.type(screen.getByLabelText('Text'), 'Answer in French.');
-      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      expect(props.onChangePreset).toHaveBeenCalledWith('english', {
-        name: 'English',
-        value: 'Answer in French.',
-        location: 'end',
-        sendOnce: false,
-        untickOnNewChat: false,
-        overrideOthers: false,
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith('english', {
+          name: 'English',
+          value: 'Answer in French.',
+          location: 'end',
+          sendOnce: false,
+          untickOnNewChat: false,
+          overrideOthers: false,
+        });
       });
+      expect(props.onChangePreset).toHaveBeenCalledTimes(1);
     });
 
     it('moves a preset to the other side of the prompt from the badge editor', async () => {
@@ -262,12 +266,13 @@ describe('promptPanel', () => {
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.click(screen.getByRole('combobox'));
       await user.click(screen.getByRole('option', { name: 'Before the prompt' }));
-      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      expect(props.onChangePreset).toHaveBeenCalledWith(
-        'english',
-        expect.objectContaining({ location: 'start' }),
-      );
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith(
+          'english',
+          expect.objectContaining({ location: 'start' }),
+        );
+      });
     });
 
     it('sets a preset to go out once per chat from the badge editor', async () => {
@@ -276,12 +281,13 @@ describe('promptPanel', () => {
 
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.click(screen.getByRole('switch', { name: 'First message only' }));
-      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      expect(props.onChangePreset).toHaveBeenCalledWith(
-        'english',
-        expect.objectContaining({ sendOnce: true }),
-      );
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith(
+          'english',
+          expect.objectContaining({ sendOnce: true }),
+        );
+      });
     });
 
     it('sets a preset to untick on New Chat from the badge editor', async () => {
@@ -290,12 +296,13 @@ describe('promptPanel', () => {
 
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.click(screen.getByRole('switch', { name: 'Untick on New Chat' }));
-      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      expect(props.onChangePreset).toHaveBeenCalledWith(
-        'english',
-        expect.objectContaining({ untickOnNewChat: true }),
-      );
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith(
+          'english',
+          expect.objectContaining({ untickOnNewChat: true }),
+        );
+      });
     });
 
     it('sets a preset to override the others from the badge editor', async () => {
@@ -304,12 +311,13 @@ describe('promptPanel', () => {
 
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.click(screen.getByRole('switch', { name: 'Override other prompts' }));
-      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      expect(props.onChangePreset).toHaveBeenCalledWith(
-        'english',
-        expect.objectContaining({ overrideOthers: true }),
-      );
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith(
+          'english',
+          expect.objectContaining({ overrideOthers: true }),
+        );
+      });
     });
 
     it('greys out the other presets while an overriding one is ticked, and says why', async () => {
@@ -350,15 +358,19 @@ describe('promptPanel', () => {
       ).not.toHaveClass('opacity-50');
     });
 
-    it('throws an in-place edit away when it is cancelled', async () => {
+    it('saves a pending edit when the badge editor closes', async () => {
       const user = userEvent.setup();
       const { props } = renderPanel({ presets });
 
       await user.click(screen.getByRole('button', { name: 'English' }));
       await user.type(screen.getByLabelText('Name'), '!');
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.keyboard('{Escape}');
 
-      expect(props.onChangePreset).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        'english',
+        expect.objectContaining({ name: 'English!' }),
+      );
     });
 
     it('lists the library in the manager', async () => {
@@ -381,6 +393,22 @@ describe('promptPanel', () => {
 
       expect(props.onAddPreset).toHaveBeenCalledWith(
         expect.objectContaining({ name: '', value: '', location: 'end' }),
+      );
+    });
+
+    it('saves an edit when the manager row collapses', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'Prompts' }));
+      const manager = screen.getByRole('dialog');
+      await user.click(within(manager).getByRole('button', { name: /English/u }));
+      await user.type(within(manager).getByLabelText('Name'), '!');
+      await user.click(within(manager).getByRole('button', { name: /English/u }));
+
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        'english',
+        expect.objectContaining({ name: 'English!' }),
       );
     });
 

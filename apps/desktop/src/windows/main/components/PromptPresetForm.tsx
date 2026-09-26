@@ -9,13 +9,14 @@ import { PROMPT_LOCATION_OPTIONS } from '@internal/multi-mind';
 import { Label, Switch, Textarea } from '@pixpilot/shadcn';
 import { Button, Input, Select } from '@pixpilot/shadcn-ui';
 import { Trash2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { promptSurface } from './prompt-surface';
 
 const LOCATION_SELECT_OPTIONS = PROMPT_LOCATION_OPTIONS.map((option) => ({
   value: option.value,
   label: option.label,
 }));
+const AUTO_SAVE_DELAY_MS = 300;
 
 /**
  * The dropdown is portalled to the end of the document like the editors
@@ -55,51 +56,87 @@ function PresetSwitch({
 
 interface PromptPresetFormProps {
   preset: PromptPreset;
-  onSave: (draft: PromptPresetDraft) => void;
+  onChange: (draft: PromptPresetDraft) => void;
   onRemove: () => void;
-  onCancel: () => void;
 }
 
-/**
- * The editor behind both a badge and a row in the manager. It works on a draft
- * rather than writing every keystroke back: the settings file is rewritten on
- * save, and an edit started by accident is thrown away by closing the editor.
- *
- * Mount it with `key={preset.id}` so switching to another preset starts a new
- * draft rather than carrying the last one over.
- */
-export function PromptPresetForm({
-  preset,
-  onSave,
-  onRemove,
-  onCancel,
-}: PromptPresetFormProps) {
-  const [name, setName] = useState(preset.name);
-  const [value, setValue] = useState(preset.value);
-  const [location, setLocation] = useState<PromptLocation>(preset.location);
-  const [sendOnce, setSendOnce] = useState(preset.sendOnce);
-  const [untickOnNewChat, setUntickOnNewChat] = useState(preset.untickOnNewChat);
-  const [overrideOthers, setOverrideOthers] = useState(preset.overrideOthers);
+/** Edits a preset from either its badge or the manager, saving changes as they settle. */
+export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFormProps) {
+  const [draft, setDraft] = useState<PromptPresetDraft>(() => ({
+    name: preset.name,
+    value: preset.value,
+    location: preset.location,
+    sendOnce: preset.sendOnce,
+    untickOnNewChat: preset.untickOnNewChat,
+    overrideOthers: preset.overrideOthers,
+  }));
+  const draftRef = useRef(draft);
+  const onChangeRef = useRef(onChange);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  onChangeRef.current = onChange;
+
+  const updateDraft = useCallback((patch: Partial<PromptPresetDraft>) => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraft(next);
+
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      onChangeRef.current(draftRef.current);
+    }, AUTO_SAVE_DELAY_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current);
+        onChangeRef.current(draftRef.current);
+      }
+    },
+    [],
+  );
 
   const handleChangeName = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => setName(event.target.value),
-    [],
+    (event: ChangeEvent<HTMLInputElement>) => updateDraft({ name: event.target.value }),
+    [updateDraft],
   );
 
   const handleChangeValue = useCallback(
-    (event: ChangeEvent<HTMLTextAreaElement>) => setValue(event.target.value),
-    [],
+    (event: ChangeEvent<HTMLTextAreaElement>) =>
+      updateDraft({ value: event.target.value }),
+    [updateDraft],
   );
 
   const handleChangeLocation = useCallback(
-    (next: string) => setLocation(next as PromptLocation),
-    [],
+    (next: string) => updateDraft({ location: next as PromptLocation }),
+    [updateDraft],
   );
 
-  const handleSave = useCallback(
-    () => onSave({ name, value, location, sendOnce, untickOnNewChat, overrideOthers }),
-    [location, name, onSave, overrideOthers, sendOnce, untickOnNewChat, value],
+  const handleChangeSendOnce = useCallback(
+    (checked: boolean) => updateDraft({ sendOnce: checked }),
+    [updateDraft],
   );
+
+  const handleChangeUntickOnNewChat = useCallback(
+    (checked: boolean) => updateDraft({ untickOnNewChat: checked }),
+    [updateDraft],
+  );
+
+  const handleChangeOverrideOthers = useCallback(
+    (checked: boolean) => updateDraft({ overrideOthers: checked }),
+    [updateDraft],
+  );
+
+  const handleRemove = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    onRemove();
+  }, [onRemove]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -107,7 +144,7 @@ export function PromptPresetForm({
         <Label htmlFor={`${preset.id}-name`}>Name</Label>
         <Input
           id={`${preset.id}-name`}
-          value={name}
+          value={draft.name}
           placeholder="Answer in English"
           spellCheck={false}
           onChange={handleChangeName}
@@ -118,7 +155,7 @@ export function PromptPresetForm({
         <Label htmlFor={`${preset.id}-value`}>Text</Label>
         <Textarea
           id={`${preset.id}-value`}
-          value={value}
+          value={draft.value}
           rows={4}
           placeholder="Text to add to the prompt"
           onChange={handleChangeValue}
@@ -131,7 +168,7 @@ export function PromptPresetForm({
           id={`${preset.id}-location`}
           contentProps={LOCATION_CONTENT_PROPS}
           options={LOCATION_SELECT_OPTIONS}
-          value={location}
+          value={draft.location}
           onChange={handleChangeLocation}
         />
       </div>
@@ -140,44 +177,35 @@ export function PromptPresetForm({
         id={`${preset.id}-send-once`}
         label="First message only"
         description="Added to the first message of a chat; the messages after it go without. New Chat adds it again."
-        checked={sendOnce}
-        onCheckedChange={setSendOnce}
+        checked={draft.sendOnce}
+        onCheckedChange={handleChangeSendOnce}
       />
 
       <PresetSwitch
         id={`${preset.id}-untick-on-new-chat`}
         label="Untick on New Chat"
         description="Stays ticked for this chat only. New Chat unticks it; tick it again to use it in the next chat."
-        checked={untickOnNewChat}
-        onCheckedChange={setUntickOnNewChat}
+        checked={draft.untickOnNewChat}
+        onCheckedChange={handleChangeUntickOnNewChat}
       />
 
       <PresetSwitch
         id={`${preset.id}-override-others`}
         label="Override other prompts"
         description="While this is ticked, it is the only prompt added. The other ticked prompts are greyed out and left out until you untick it."
-        checked={overrideOthers}
-        onCheckedChange={setOverrideOthers}
+        checked={draft.overrideOthers}
+        onCheckedChange={handleChangeOverrideOthers}
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center">
         <Button
           variant="ghost"
           size="sm"
           className="text-destructive hover:text-destructive"
-          onClick={onRemove}
+          onClick={handleRemove}
         >
           <Trash2 />
           Delete
-        </Button>
-
-        <div className="flex-1" />
-
-        <Button variant="outline" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button size="sm" onClick={handleSave}>
-          Save
         </Button>
       </div>
     </div>

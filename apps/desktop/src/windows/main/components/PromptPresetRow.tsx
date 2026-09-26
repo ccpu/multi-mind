@@ -45,12 +45,9 @@ export function PromptPresetRow({
 
   const handleToggle = useCallback(() => onToggle(preset.id), [onToggle, preset.id]);
 
-  const handleSave = useCallback(
-    (draft: PromptPresetDraft) => {
-      onChange(preset.id, draft);
-      onToggleExpanded(preset.id);
-    },
-    [onChange, onToggleExpanded, preset.id],
+  const handleChange = useCallback(
+    (draft: PromptPresetDraft) => onChange(preset.id, draft),
+    [onChange, preset.id],
   );
 
   const handleRemove = useCallback(() => onRemove(preset.id), [onRemove, preset.id]);
@@ -95,9 +92,8 @@ export function PromptPresetRow({
           <PromptPresetForm
             key={preset.id}
             preset={preset}
-            onSave={handleSave}
+            onChange={handleChange}
             onRemove={handleRemove}
-            onCancel={handleToggleExpanded}
           />
         </div>
       )}
