@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/ccpu/multi-mind/compare/v1.7.0...v1.8.0) (2026-09-26)
+
+
+### Features
+
+* **prompt:** refactor PromptPresetForm and PromptPresetRow to use onChange callback ([8f98ca7](https://github.com/ccpu/multi-mind/commit/8f98ca72df96d1eca9ba0c1abaa94b1edead80f0))
+
 # [1.7.0](https://github.com/ccpu/multi-mind/compare/v1.6.0...v1.7.0) (2026-09-26)
 
 
