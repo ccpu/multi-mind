@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/ccpu/multi-mind/compare/v1.6.0...v1.7.0) (2026-09-26)
+
+
+### Features
+
+* **desktop:** improve prompt presets and search history ([c121b80](https://github.com/ccpu/multi-mind/commit/c121b80e27b6ed1053ac0d2e94530d05944b9f2b))
+
 # [1.6.0](https://github.com/ccpu/multi-mind/compare/v1.5.0...v1.6.0) (2026-09-25)
 
 
