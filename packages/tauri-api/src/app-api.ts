@@ -8,7 +8,7 @@ import {
   saveSettings,
   setSettingsLocation,
 } from './commands';
-import { onGuestMessage, onSettingsChanged } from './events';
+import { onGuestDownload, onGuestMessage, onSettingsChanged } from './events';
 import {
   guestConfig,
   guestCookies,
@@ -62,6 +62,7 @@ export const appApi = {
   events: {
     onSettingsChanged,
     onGuestMessage,
+    onGuestDownload,
   },
 
   /** The embedded browsers, which only a main window drives. */

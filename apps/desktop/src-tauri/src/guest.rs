@@ -29,7 +29,7 @@ use std::time::Duration;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::webview::{Cookie, Webview, WebviewBuilder};
+use tauri::webview::{Cookie, DownloadEvent, Webview, WebviewBuilder};
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, State, WebviewUrl, Window,
 };
@@ -69,6 +69,11 @@ const PROFILE_DIRECTORY: &str = "browser-profile";
 
 /// Event a guest's message is re-broadcast on, for its own window to answer.
 const GUEST_MESSAGE_EVENT: &str = "multi-mind://guest-message";
+
+/// Event a guest's download is announced on, for its own window to show. A
+/// child webview gets no download flyout of its own once a handler is set, so
+/// without this a file lands in Downloads with nothing to say it did.
+const GUEST_DOWNLOAD_EVENT: &str = "multi-mind://guest-download";
 
 /// The current default for the setting the user changes in Settings → Memory.
 const DEFAULT_IDLE_MEMORY_TRIM_DELAY_SECONDS: u64 = 10;
@@ -335,6 +340,17 @@ pub struct GuestCookie {
 pub struct GuestCookieRemoval {
     pub name: String,
     pub url: String,
+}
+
+/// Payload of the guest-download event.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GuestDownloadPayload {
+    website_id: String,
+    url: String,
+    /// `started`, `finished` or `failed`.
+    state: &'static str,
+    path: Option<String>,
 }
 
 /// Payload of the guest-message event.
@@ -680,6 +696,36 @@ pub async fn guest_sync(
 
         if let Some(user_agent) = &host.user_agent {
             builder = builder.user_agent(user_agent);
+        }
+
+        {
+            let app = app.clone();
+            let window_label = window_label.clone();
+            let website_id = pane.website_id.clone();
+
+            builder = builder.on_download(move |_webview, event| {
+                let payload = match event {
+                    DownloadEvent::Requested { url, destination } => GuestDownloadPayload {
+                        website_id: website_id.clone(),
+                        url: url.to_string(),
+                        state: "started",
+                        path: Some(destination.display().to_string()),
+                    },
+                    DownloadEvent::Finished { url, path, success } => GuestDownloadPayload {
+                        website_id: website_id.clone(),
+                        url: url.to_string(),
+                        state: if success { "finished" } else { "failed" },
+                        path: path.map(|path| path.display().to_string()),
+                    },
+                    _ => return true,
+                };
+
+                if let Err(error) = app.emit_to(&window_label, GUEST_DOWNLOAD_EVENT, payload) {
+                    eprintln!("Failed to announce a download: {error}");
+                }
+
+                true
+            });
         }
 
         #[cfg(windows)]

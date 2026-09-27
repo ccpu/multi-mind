@@ -57,6 +57,7 @@ vi.mock('@internal/tauri-api', () => ({
         return () => settingsListeners.delete(callback);
       },
       onGuestMessage: () => () => undefined,
+      onGuestDownload: () => () => undefined,
     },
   },
 }));

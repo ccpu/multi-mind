@@ -1,6 +1,14 @@
-import type { AppSettings, GuestMessageEvent } from '@internal/multi-mind';
+import type {
+  AppSettings,
+  GuestDownloadEvent,
+  GuestMessageEvent,
+} from '@internal/multi-mind';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { GUEST_MESSAGE_EVENT, normalizeSettings } from '@internal/multi-mind';
+import {
+  GUEST_DOWNLOAD_EVENT,
+  GUEST_MESSAGE_EVENT,
+  normalizeSettings,
+} from '@internal/multi-mind';
 import { listen } from '@tauri-apps/api/event';
 
 /** Broadcast after the settings file changes, whoever changed it. */
@@ -57,4 +65,11 @@ export function onSettingsChanged(handler: (settings: AppSettings) => void): () 
  */
 export function onGuestMessage(handler: (event: GuestMessageEvent) => void): () => void {
   return subscribe<GuestMessageEvent>(GUEST_MESSAGE_EVENT, handler);
+}
+
+/** A download an embedded site started, finished or failed. */
+export function onGuestDownload(
+  handler: (event: GuestDownloadEvent) => void,
+): () => void {
+  return subscribe<GuestDownloadEvent>(GUEST_DOWNLOAD_EVENT, handler);
 }

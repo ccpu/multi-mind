@@ -50,6 +50,18 @@ export function createGuestGlobals(): GuestGlobals {
  */
 export const GUEST_MESSAGE_EVENT = 'multi-mind://guest-message';
 
+/** Tauri event a guest's download is announced on, to the window it sits in. */
+export const GUEST_DOWNLOAD_EVENT = 'multi-mind://guest-download';
+
+/** Payload of {@link GUEST_DOWNLOAD_EVENT}. */
+export interface GuestDownloadEvent {
+  websiteId: string;
+  url: string;
+  state: 'started' | 'finished' | 'failed';
+  /** Where the file is (or will be) saved, when WebView2 said. */
+  path: string | null;
+}
+
 /** Payload of {@link GUEST_MESSAGE_EVENT}. */
 export interface GuestMessageEvent {
   /** Id of the site the message came from, as `activeWebsites` holds it. */

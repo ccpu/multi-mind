@@ -14,6 +14,7 @@ import {
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
 import { cn } from '@pixpilot/shadcn';
+import { Toaster } from '@pixpilot/shadcn-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { MenuBar } from './components/MenuBar';
@@ -21,6 +22,7 @@ import { PROMPT_SURFACE_SELECTOR } from './components/prompt-surface';
 import { PromptPanel } from './components/PromptPanel';
 import { WebViewPanel } from './components/WebViewPanel';
 import { useAppSettings } from './hooks/useAppSettings';
+import { useDownloadToasts } from './hooks/useDownloadToasts';
 import { useGuestMessages } from './hooks/useGuestMessages';
 import { useGuestPanes } from './hooks/useGuestPanes';
 import { useOverlayPresence } from './hooks/useOverlayPresence';
@@ -48,6 +50,7 @@ function App() {
     updatePreset,
     removePreset,
   } = useAppSettings();
+  useDownloadToasts();
   const [prompt, setPrompt] = useState('');
   const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
   const [guestConfig, setGuestConfig] = useState<GuestConfig | null>(null);
@@ -338,6 +341,7 @@ function App() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <Toaster position="bottom-right" />
     </div>
   );
 }
