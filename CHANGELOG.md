@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/ccpu/multi-mind/compare/v1.9.0...v1.10.0) (2026-09-27)
+
+
+### Features
+
+* **prompt:** implement use-once preset functionality ([0ad7155](https://github.com/ccpu/multi-mind/commit/0ad7155ec515d1f8cb13c882448c95fb24c1d020))
+
 # [1.9.0](https://github.com/ccpu/multi-mind/compare/v1.8.0...v1.9.0) (2026-09-26)
 
 
