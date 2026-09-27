@@ -28,16 +28,11 @@ export interface PromptPreset {
   readonly value: string;
   /** Which side of the typed prompt {@link value} goes on. */
   readonly location: PromptLocation;
-  /**
-   * Whether the preset goes out with the first prompt of a chat only. The
-   * sites keep the conversation, so a standing instruction needs saying once;
-   * **New Chat** is what makes it due again.
-   */
+  /** Whether the preset is unticked after it is included in a sent message. */
   readonly sendOnce: boolean;
   /**
    * Whether **New Chat** unticks the preset, so it only lasts for the chat it
-   * was ticked in. This is about whether it stays ticked, not about which
-   * messages carry it; that is {@link sendOnce}.
+   * was ticked in.
    */
   readonly untickOnNewChat: boolean;
   /**
@@ -153,17 +148,6 @@ export function promptOverriddenBy(
   overriding: readonly PromptPreset[],
 ): PromptPreset[] {
   return overriding.some((entry) => entry.id === preset.id) ? [] : [...overriding];
-}
-
-/**
- * The ticked presets still due in this chat: a send-once preset drops out
- * once its id is in `sent`, and every other preset goes out every time.
- */
-export function duePrompts(
-  presets: readonly PromptPreset[],
-  sent: ReadonlySet<string>,
-): PromptPreset[] {
-  return presets.filter((preset) => !preset.sendOnce || !sent.has(preset.id));
 }
 
 /**

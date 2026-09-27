@@ -7,6 +7,7 @@ import {
   togglePrompt,
   toggleWebsite as toggleWebsiteIn,
   untickChatPrompts,
+  untickSentOncePrompts,
   updatePrompt,
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
@@ -21,6 +22,8 @@ export interface UseAppSettingsResult {
   openWebsites: (websiteIds: readonly string[]) => void;
   /** Ticks a prompt preset on or off. */
   togglePreset: (promptId: string) => void;
+  /** Unticks use-once presets included in the sent message. */
+  untickSentOncePresets: (sentPresets: readonly PromptPreset[]) => void;
   /** Unticks the presets that only last for one chat, as **New Chat** does. */
   untickChatPresets: () => void;
   /** Moves the dragged preset to where the one it was dropped on is. */
@@ -138,6 +141,18 @@ export function useAppSettings(): UseAppSettingsResult {
     [save],
   );
 
+  const untickSentOncePresets = useCallback(
+    (sentPresets: readonly PromptPreset[]) => {
+      const { current } = settingsRef;
+      const { activePrompts } = untickSentOncePrompts(current, sentPresets);
+
+      if (activePrompts.length !== current.activePrompts.length) {
+        save({ activePrompts });
+      }
+    },
+    [save],
+  );
+
   const untickChatPresets = useCallback(() => {
     const { current } = settingsRef;
     const { activePrompts } = untickChatPrompts(current);
@@ -188,6 +203,7 @@ export function useAppSettings(): UseAppSettingsResult {
     toggleWebsite,
     openWebsites,
     togglePreset,
+    untickSentOncePresets,
     untickChatPresets,
     movePreset,
     addPreset,

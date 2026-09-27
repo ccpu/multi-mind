@@ -4,7 +4,6 @@ import type { PromptEditorHandle } from './types/prompt-editor';
 import {
   composePrompt,
   createRunPromptScript,
-  duePrompts,
   getActivePrompts,
   getActiveWebsites,
   getBottomPanelPercent,
@@ -42,6 +41,7 @@ function App() {
     toggleWebsite,
     openWebsites,
     togglePreset,
+    untickSentOncePresets,
     untickChatPresets,
     movePreset,
     addPreset,
@@ -55,8 +55,6 @@ function App() {
 
   const promptRef = useRef<PromptEditorHandle | null>(null);
   const historyRef = useRef(new HistoryManager());
-  /** Send-once presets that already went out in this chat. */
-  const sentOnceRef = useRef(new Set<string>());
 
   // Latest values for callbacks that must stay referentially stable, so that
   // re-measuring a pane never re-runs anything that depends on them.
@@ -175,26 +173,20 @@ function App() {
    * reason not to send: what has to be there is the composed text, not the
    * typed text.
    *
-   * A send-once preset goes out with the first prompt of a chat and is left
-   * off after that, until **New Chat** starts another one. A ticked
-   * overriding preset leaves the other ticked ones out altogether.
+   * A use-once preset is unticked after it is sent. A ticked overriding
+   * preset leaves the other ticked ones out altogether.
    */
   const runPrompt = useCallback(() => {
     const typedPrompt = promptTextRef.current;
     const guestGlobals = guestConfigRef.current;
-    const presets = duePrompts(
-      promptsToSend(getActivePrompts(settingsRef.current)),
-      sentOnceRef.current,
-    );
+    const presets = promptsToSend(getActivePrompts(settingsRef.current));
     const composed = composePrompt(typedPrompt, presets);
 
     if (composed === '' || guestGlobals === null) {
       return;
     }
 
-    presets
-      .filter((preset) => preset.sendOnce)
-      .forEach((preset) => sentOnceRef.current.add(preset.id));
+    untickSentOncePresets(presets);
 
     const websites = getActiveWebsites(settingsRef.current);
     const savePrompt = recordPrompt(
@@ -224,7 +216,7 @@ function App() {
 
     setPrompt('');
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, [recordPrompt]);
+  }, [recordPrompt, untickSentOncePresets]);
 
   /** Reopens saved conversations, enabling and opening their providers first. */
   const openConversations = useCallback(
@@ -242,11 +234,10 @@ function App() {
   );
 
   /**
-   * Port of `WebViewManager.Reload`. A new chat makes every send-once preset
-   * due again, and unticks the presets that only last for one chat.
+   * Port of `WebViewManager.Reload`. A new chat unticks the presets that only
+   * last for one chat.
    */
   const handleReload = useCallback(() => {
-    sentOnceRef.current.clear();
     untickChatPresets();
     getActiveWebsites(settingsRef.current).forEach((website) => {
       stopTracking(website.id);

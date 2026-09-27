@@ -4,7 +4,6 @@ import {
   BLANK_PROMPT_PRESET,
   composePrompt,
   createPromptPreset,
-  duePrompts,
   normalizePromptPreset,
   normalizePromptPresets,
   overridingPrompts,
@@ -143,28 +142,6 @@ describe('promptOverriddenBy', () => {
 
   it('is empty while nothing overrides', () => {
     expect(promptOverriddenBy(preset(), [])).toStrictEqual([]);
-  });
-});
-
-describe('duePrompts', () => {
-  it('drops a send-once preset once it has gone out', () => {
-    const presets = [preset({ id: 'once', sendOnce: true }), preset()];
-
-    expect(duePrompts(presets, new Set(['once'])).map(({ id }) => id)).toStrictEqual([
-      'english',
-    ]);
-  });
-
-  it('keeps a send-once preset that has not gone out yet', () => {
-    const presets = [preset({ id: 'once', sendOnce: true })];
-
-    expect(duePrompts(presets, new Set())).toStrictEqual(presets);
-  });
-
-  it('keeps every other preset, whatever went out before', () => {
-    const presets = [preset()];
-
-    expect(duePrompts(presets, new Set(['english']))).toStrictEqual(presets);
   });
 });
 

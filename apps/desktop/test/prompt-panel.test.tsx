@@ -283,12 +283,12 @@ describe('promptPanel', () => {
       });
     });
 
-    it('sets a preset to go out once per chat from the badge editor', async () => {
+    it('sets a preset to untick after use from the badge editor', async () => {
       const user = userEvent.setup();
       const { props } = renderPanel({ presets });
 
       await user.click(screen.getByRole('button', { name: 'English' }));
-      await user.click(screen.getByRole('switch', { name: 'First message only' }));
+      await user.click(screen.getByRole('switch', { name: 'Use once' }));
 
       await waitFor(() => {
         expect(props.onChangePreset).toHaveBeenCalledWith(

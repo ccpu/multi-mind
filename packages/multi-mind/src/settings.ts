@@ -312,6 +312,21 @@ export function untickChatPrompts(settings: AppSettings): AppSettings {
   };
 }
 
+/** Unticks use-once presets that were included in the sent message. */
+export function untickSentOncePrompts(
+  settings: AppSettings,
+  sentPresets: readonly PromptPreset[],
+): AppSettings {
+  const sentOnce = new Set(
+    sentPresets.filter((preset) => preset.sendOnce).map((preset) => preset.id),
+  );
+
+  return {
+    ...settings,
+    activePrompts: settings.activePrompts.filter((id) => !sentOnce.has(id)),
+  };
+}
+
 /**
  * Reorders the prompt library by drag and drop, which is also the order the
  * badges sit in and the order ticked presets join the prompt in.
