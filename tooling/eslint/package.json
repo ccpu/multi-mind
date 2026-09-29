@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@pixpilot/eslint-config": "^2.18.0",
-    "@pixpilot/eslint-config-react": "^0.10.0"
+    "@pixpilot/eslint-config-react": "^0.10.1"
   },
   "devDependencies": {
     "@internal/prettier-config": "workspace:*",
