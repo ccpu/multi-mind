@@ -97,6 +97,15 @@ export const MENU_MESSAGE_PREFIX = '__menu__';
 /** Prefix for periodically reported guest URL and title metadata. */
 export const PAGE_MESSAGE_PREFIX = '__page__';
 
+/** Prefix for a prompt that could not find or fill a site's composer. */
+export const PROMPT_ERROR_MESSAGE_PREFIX = '__prompt_error__';
+
+export interface GuestPromptError {
+  attemptId: string;
+  kind: 'input' | 'button' | 'insert';
+  selector: string;
+}
+
 export interface GuestPageReport {
   url: string;
   title: string;

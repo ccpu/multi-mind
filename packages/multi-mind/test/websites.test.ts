@@ -12,6 +12,15 @@ import {
 const CHATGPT = DEFAULT_WEBSITES.find((website) => website.id === 'chatgpt')!;
 
 describe('dEFAULT_WEBSITES', () => {
+  it('recognises the ChatGPT composer shown in an existing conversation', () => {
+    expect(CHATGPT.inputSelector).toContain(
+      '[data-composer-markdown][contenteditable="true"]',
+    );
+    expect(CHATGPT.inputSelector).toContain(
+      'div[contenteditable="true"][role="textbox"]',
+    );
+  });
+
   it('uses each seeded name as its id, which is what carries old settings over', () => {
     expect(DEFAULT_WEBSITES.every((website) => website.id === website.name)).toBe(true);
   });

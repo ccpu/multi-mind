@@ -264,6 +264,41 @@ describe('main window', () => {
     expect(textbox).toHaveValue('first prompt');
   });
 
+  it('shows and dismisses a selector error in the affected browser pane', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ promptEditor: 'plain', activeWebsites: ['chatgpt'] }),
+    );
+    render(<App />);
+
+    await user.type(
+      await screen.findByPlaceholderText(/Ask every enabled model/u),
+      'hello',
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() => expect(guestRun).toHaveBeenCalled());
+
+    const script = guestRun.mock.calls[0]?.[1] ?? '';
+    const attemptId = script.match(/attemptId: "(?<id>[^"]+)"/u)?.groups?.['id'];
+    expect(attemptId).toBeDefined();
+    guestListeners.forEach((listener) =>
+      listener({
+        websiteId: 'chatgpt',
+        message: `__prompt_error__${JSON.stringify({
+          attemptId,
+          kind: 'input',
+          selector: '#missing',
+        })}`,
+      }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Selector not found');
+    await user.click(
+      screen.getByRole('button', { name: 'Dismiss chatgpt prompt error' }),
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   /*
    * A ticked preset is a prompt of its own: the box being empty used to stop
    * the send outright, which left a preset-only prompt with no way out.

@@ -1,5 +1,6 @@
 import type { GuestGlobals } from '../src/messages';
-import { describe, expect, it } from 'vitest';
+import { createContext, Script } from 'node:vm';
+import { describe, expect, it, vi } from 'vitest';
 import { createGuestGlobals } from '../src/messages';
 import {
   createGuestScripts,
@@ -106,6 +107,46 @@ describe('createPopupScripts', () => {
 });
 
 describe('createRunPromptScript', () => {
+  it('produces valid JavaScript and reports a missing selector through the bridge', () => {
+    const script = createRunPromptScript(claude, 'hi', globals, 'attempt-1');
+
+    expect(() => new Script(script)).not.toThrow();
+    expect(script).toContain('"__prompt_error__"');
+    expect(script).toContain('attemptId: "attempt-1"');
+    expect(script).toContain("reportFailure('input'");
+    expect(script).toContain("reportFailure('button'");
+  });
+
+  it('reports an input selector that stays missing after the retry window', () => {
+    vi.useFakeTimers();
+    try {
+      const messages: string[] = [];
+      const script = createRunPromptScript(claude, 'hi', globals, 'attempt-2');
+      const context = createContext({
+        window: {
+          _find: () => null,
+          _bridge: { postMessage: (message: string) => messages.push(message) },
+        },
+        setTimeout,
+        Date,
+        console: { error: vi.fn() },
+      });
+
+      new Script(script).runInContext(context);
+      vi.advanceTimersByTime(3100);
+
+      expect(messages).toStrictEqual([
+        `__prompt_error__${JSON.stringify({
+          attemptId: 'attempt-2',
+          kind: 'input',
+          selector: claude.inputSelector,
+        })}`,
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('embeds the selectors and the prompt as JSON literals', () => {
     const script = createRunPromptScript(claude, 'what is 2 + 2?', globals);
 

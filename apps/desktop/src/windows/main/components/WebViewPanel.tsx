@@ -1,5 +1,6 @@
-import type { WebsiteInfo } from '@internal/multi-mind';
+import type { GuestPromptError, WebsiteInfo } from '@internal/multi-mind';
 import { cn } from '@pixpilot/shadcn';
+import { X } from 'lucide-react';
 import { useCallback } from 'react';
 
 interface WebViewPanelProps {
@@ -10,6 +11,8 @@ interface WebViewPanelProps {
    */
   grow: boolean;
   onRegister: (websiteId: string, element: HTMLDivElement | null) => void;
+  promptError: GuestPromptError | undefined;
+  onDismissError: (websiteId: string) => void;
 }
 
 /**
@@ -23,7 +26,13 @@ interface WebViewPanelProps {
  * but it carries the background so a browser that is still loading does not
  * show through to whatever was behind the window.
  */
-export function WebViewPanel({ website, grow, onRegister }: WebViewPanelProps) {
+export function WebViewPanel({
+  website,
+  grow,
+  onRegister,
+  promptError,
+  onDismissError,
+}: WebViewPanelProps) {
   const attachRef = useCallback(
     (element: HTMLDivElement | null) => {
       onRegister(website.id, element);
@@ -35,12 +44,34 @@ export function WebViewPanel({ website, grow, onRegister }: WebViewPanelProps) {
   // item with a basis of its own.
   return (
     <div
-      ref={attachRef}
       data-website={website.id}
       className={cn(
-        'relative h-full min-w-0 overflow-hidden bg-background',
+        'flex h-full min-w-0 flex-col overflow-hidden bg-background',
         grow && 'flex-1',
       )}
-    />
+    >
+      <div ref={attachRef} className="min-h-0 flex-1" />
+      {promptError === undefined ? null : (
+        <div
+          role="alert"
+          title={promptError.selector}
+          className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-red-300 bg-red-50 px-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+        >
+          <span className="truncate">
+            {promptError.kind === 'insert'
+              ? 'Could not enter prompt'
+              : 'Selector not found'}
+          </span>
+          <button
+            type="button"
+            aria-label={`Dismiss ${website.name} prompt error`}
+            className="shrink-0 rounded p-0.5 hover:bg-red-100 focus-visible:outline-2 dark:hover:bg-red-900"
+            onClick={() => onDismissError(website.id)}
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

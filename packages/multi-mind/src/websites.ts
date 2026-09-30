@@ -5,7 +5,7 @@ import { createId } from './ids';
  * `Multi Mind/MainForm.cs`. The WinForms build hard-coded that list; here it is only
  * the seed for {@link AppSettings.websites}, which the settings window owns and
  * the user can edit, reorder and extend. The defaults, their order and every
- * selector are still byte-for-byte identical to the original.
+ * selectors can be updated as sites change.
  */
 export interface WebsiteInfo {
   /**
@@ -51,7 +51,8 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
   seed({
     name: 'chatgpt',
     url: 'https://chatgpt.com/',
-    inputSelector: 'div[contenteditable="true"][role="textbox"]',
+    inputSelector:
+      '[data-composer-markdown][contenteditable="true"], #prompt-textarea[contenteditable="true"], div.ProseMirror[contenteditable="true"][role="textbox"], div[contenteditable="true"][role="textbox"]',
     enabled: true,
     buttonSelector: 'button[type="submit"][aria-label="Send"]',
   }),

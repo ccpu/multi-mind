@@ -6,6 +6,7 @@ import {
   MENU_MESSAGE_PREFIX,
   OPEN_MESSAGE_PREFIX,
   PAGE_MESSAGE_PREFIX,
+  PROMPT_ERROR_MESSAGE_PREFIX,
 } from './messages';
 
 /**
@@ -362,12 +363,16 @@ export function createPopupScripts(): string[] {
 export function createRunPromptScript(
   website: WebsiteInfo,
   prompt: string,
-  { findKey }: GuestGlobals,
+  { findKey, bridgeKey }: GuestGlobals,
+  attemptId = '',
 ): string {
   const inputSelector = JSON.stringify(website.inputSelector);
   const buttonSelector = JSON.stringify(website.buttonSelector);
   const promptLiteral = JSON.stringify(prompt);
   const find = JSON.stringify(findKey);
+  const bridge = JSON.stringify(bridgeKey);
+  const errorPrefix = JSON.stringify(PROMPT_ERROR_MESSAGE_PREFIX);
+  const attempt = JSON.stringify(attemptId);
 
   return asVoidScript(`
     (function () {
@@ -377,7 +382,14 @@ export function createRunPromptScript(
       }
 
       function readValue(input) {
-        return isFormField(input) ? input.value : input.innerText;
+        return isFormField(input) ? input.value : (input.innerText || input.textContent || '');
+      }
+
+      function containsPrompt(input, value) {
+        function compact(text) {
+          return text.replace(/\\s+/g, ' ').trim();
+        }
+        return compact(readValue(input)).indexOf(compact(value)) !== -1;
       }
 
       /**
@@ -429,7 +441,7 @@ export function createRunPromptScript(
         document.execCommand('insertText', false, value);
 
         setTimeout(function () {
-          if (readValue(input).indexOf(value) !== -1) {
+          if (containsPrompt(input, value)) {
             return;
           }
 
@@ -462,18 +474,64 @@ export function createRunPromptScript(
         });
       }
 
-      try {
-        var input = window[${find}](${inputSelector});
-        if (!input) throw new Error("Unable to find input '" + ${inputSelector} + "'");
-        var inputValue = ${promptLiteral};
+      function reportFailure(kind, selector) {
+        console.error('Unable to use ' + kind + ' selector: ' + selector);
+        window[${bridge}].postMessage(
+          ${errorPrefix} + JSON.stringify({ attemptId: ${attempt}, kind: kind, selector: selector })
+        );
+      }
 
-        focusAndSelectAll(input);
+      var inputValue = ${promptLiteral};
 
-        window.setTimeout(() => {
+      function waitFor(selector, timeout, onFound, onMissing) {
+        var deadline = Date.now() + timeout;
+        function check() {
+          var element;
           try {
-            // Selecting fires \`selectionchange\` asynchronously, and an editor
-            // that tracks its own selection only learns where the caret is
-            // when that arrives. Inserting any sooner is dropped outright.
+            element = window[${find}](selector);
+          } catch (error) {
+            onMissing();
+            return;
+          }
+          if (element) {
+            onFound(element);
+          } else if (Date.now() < deadline) {
+            setTimeout(check, 100);
+          } else {
+            onMissing();
+          }
+        }
+        check();
+      }
+
+      var replacements = 0;
+      function retryInput() {
+        replacements += 1;
+        if (replacements > 2) {
+          reportFailure('input', ${inputSelector});
+          return;
+        }
+        waitFor(${inputSelector}, 1500, useInput, function () {
+          reportFailure('input', ${inputSelector});
+        });
+      }
+
+      function useInput(input) {
+        try {
+          focusAndSelectAll(input);
+        } catch (error) {
+          reportFailure('insert', ${inputSelector});
+          return;
+        }
+
+        // Selection change reaches rich editors on the next task. Re-find the
+        // editor if the page replaced it while that event was in flight.
+        setTimeout(function () {
+          if (!input.isConnected) {
+            retryInput();
+            return;
+          }
+          try {
             if (isFormField(input)) {
               setFormFieldValue(input, inputValue);
               triggerInputEvent(input);
@@ -481,24 +539,32 @@ export function createRunPromptScript(
               insertText(input, inputValue);
             }
           } catch (error) {
-            console.error(error.message)
+            reportFailure('insert', ${inputSelector});
+            return;
           }
+
+          setTimeout(function () {
+            if (!input.isConnected) {
+              retryInput();
+              return;
+            }
+            if (!containsPrompt(input, inputValue)) {
+              reportFailure('insert', ${inputSelector});
+              return;
+            }
+            waitFor(${buttonSelector}, 3000, function (submitButton) {
+              submitButton.disabled = false;
+              submitButton.click();
+            }, function () {
+              reportFailure('button', ${buttonSelector});
+            });
+          }, 1000);
         }, 150);
-
-        setTimeout(() => {
-          try {
-            var submitButton = window[${find}](${buttonSelector});
-            if (!submitButton) throw new Error("Unable to find submit button '" + ${buttonSelector} + "'");
-            submitButton.disabled = false;
-            submitButton.click();
-          } catch (error) {
-            console.error(error.message)
-          }
-        }, 1200);
-
-      } catch (error) {
-        console.error(error.message)
       }
+
+      waitFor(${inputSelector}, 3000, useInput, function () {
+        reportFailure('input', ${inputSelector});
+      });
     })();
   `);
 }

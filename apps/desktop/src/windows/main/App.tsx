@@ -1,8 +1,9 @@
-import type { GuestConfig } from '@internal/multi-mind';
+import type { GuestConfig, GuestPromptError } from '@internal/multi-mind';
 import type { SearchConversation } from '@internal/tauri-api';
 import type { PromptEditorHandle } from './types/prompt-editor';
 import {
   composePrompt,
+  createId,
   createRunPromptScript,
   getActivePrompts,
   getActiveWebsites,
@@ -55,9 +56,11 @@ function App() {
   const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
   const [guestConfig, setGuestConfig] = useState<GuestConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [promptErrors, setPromptErrors] = useState<Record<string, GuestPromptError>>({});
 
   const promptRef = useRef<PromptEditorHandle | null>(null);
   const historyRef = useRef(new HistoryManager());
+  const attemptsRef = useRef(new Map<string, string>());
 
   // Latest values for callbacks that must stay referentially stable, so that
   // re-measuring a pane never re-runs anything that depends on them.
@@ -97,7 +100,24 @@ function App() {
   }, []);
 
   const { recordPrompt, reportPage, stopTracking } = useSearchHistory();
-  useGuestMessages({ boundsOf, onClicked: collapsePrompt, onPageReported: reportPage });
+  const handlePromptError = useCallback((websiteId: string, error: GuestPromptError) => {
+    if (attemptsRef.current.get(websiteId) === error.attemptId) {
+      setPromptErrors((current) => ({ ...current, [websiteId]: error }));
+    }
+  }, []);
+  const dismissPromptError = useCallback((websiteId: string) => {
+    setPromptErrors((current) => {
+      const next = { ...current };
+      delete next[websiteId];
+      return next;
+    });
+  }, []);
+  useGuestMessages({
+    boundsOf,
+    onClicked: collapsePrompt,
+    onPageReported: reportPage,
+    onPromptError: handlePromptError,
+  });
 
   const overlayOpen = useOverlayPresence();
 
@@ -197,8 +217,14 @@ function App() {
       websites.map((website) => website.id),
     );
     websites.forEach((website) => {
+      const attemptId = createId('prompt-attempt');
+      attemptsRef.current.set(website.id, attemptId);
+      dismissPromptError(website.id);
       appApi.guest
-        .run(website.id, createRunPromptScript(website, composed, guestGlobals))
+        .run(
+          website.id,
+          createRunPromptScript(website, composed, guestGlobals, attemptId),
+        )
         .then(
           () => {
             savePrompt(website.id).catch((error: unknown) => {
@@ -219,7 +245,7 @@ function App() {
 
     setPrompt('');
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, [recordPrompt, untickSentOncePresets]);
+  }, [dismissPromptError, recordPrompt, untickSentOncePresets]);
 
   /** Reopens saved conversations, enabling and opening their providers first. */
   const openConversations = useCallback(
@@ -316,6 +342,8 @@ function App() {
                 website={website}
                 grow={!splitActive}
                 onRegister={registerPane}
+                promptError={promptErrors[website.id]}
+                onDismissError={dismissPromptError}
               />
             ))}
       </div>

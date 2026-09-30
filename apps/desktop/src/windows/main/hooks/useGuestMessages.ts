@@ -1,6 +1,7 @@
 import type {
   GuestContextMenuReport,
   GuestPageReport,
+  GuestPromptError,
   GuestWindowRequest,
 } from '@internal/multi-mind';
 import type { GuestBounds } from '@internal/tauri-api';
@@ -13,6 +14,7 @@ import {
   OPEN_MESSAGE_PREFIX,
   PAGE_MESSAGE_PREFIX,
   parsePrefixedMessage,
+  PROMPT_ERROR_MESSAGE_PREFIX,
 } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
 import { useCallback, useEffect } from 'react';
@@ -24,6 +26,7 @@ export interface UseGuestMessagesOptions {
   /** A press inside a browser, which collapses the prompt box. */
   onClicked: () => void;
   onPageReported?: (websiteId: string, page: GuestPageReport) => void;
+  onPromptError?: (websiteId: string, error: GuestPromptError) => void;
 }
 
 /**
@@ -44,6 +47,7 @@ export function useGuestMessages({
   boundsOf,
   onClicked,
   onPageReported,
+  onPromptError,
 }: UseGuestMessagesOptions): void {
   const showContextMenu = useGuestContextMenu({ boundsOf });
 
@@ -123,9 +127,27 @@ export function useGuestMessages({
         return;
       }
 
+      if (message.startsWith(PROMPT_ERROR_MESSAGE_PREFIX)) {
+        const report = parsePrefixedMessage<GuestPromptError>(
+          message,
+          PROMPT_ERROR_MESSAGE_PREFIX,
+        );
+        if (
+          report !== null &&
+          typeof report.attemptId === 'string' &&
+          typeof report.selector === 'string' &&
+          (report.kind === 'input' ||
+            report.kind === 'button' ||
+            report.kind === 'insert')
+        ) {
+          onPromptError?.(websiteId, report);
+        }
+        return;
+      }
+
       console.error('Unexpected message from an embedded browser:', message);
     },
-    [handleMenuRequest, handleOpenRequest, onClicked, onPageReported],
+    [handleMenuRequest, handleOpenRequest, onClicked, onPageReported, onPromptError],
   );
 
   useEffect(() => appApi.events.onGuestMessage(handleMessage), [handleMessage]);
