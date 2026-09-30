@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/ccpu/multi-mind/compare/v1.11.0...v1.12.0) (2026-09-30)
+
+
+### Features
+
+* **prompt:** enhance error handling for prompt submissions ([5097b6b](https://github.com/ccpu/multi-mind/commit/5097b6beb443c0910276785652234220b7cbc9d5))
+
 # [1.11.0](https://github.com/ccpu/multi-mind/compare/v1.10.0...v1.11.0) (2026-09-27)
 
 
