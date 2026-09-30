@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/ccpu/multi-mind/compare/v1.10.0...v1.11.0) (2026-09-27)
+
+
+### Features
+
+* **download:** add download event handling and notifications ([bfdc777](https://github.com/ccpu/multi-mind/commit/bfdc77738c04cef0877a85a3f5220ebd09dc05c9))
+
 # [1.10.0](https://github.com/ccpu/multi-mind/compare/v1.9.0...v1.10.0) (2026-09-27)
 
 
