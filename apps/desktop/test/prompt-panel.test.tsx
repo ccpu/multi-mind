@@ -34,6 +34,7 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
     heightPercent: 20,
     presets: [],
     activePrompts: [],
+    usedPrompts: [],
     onChange: vi.fn(),
     onActivate: vi.fn(),
     onSubmit: vi.fn(),
@@ -41,6 +42,7 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
     onNextPrompt: vi.fn(),
     onDismiss: vi.fn(),
     onTogglePreset: vi.fn(),
+    onReusePreset: vi.fn(),
     onMovePreset: vi.fn(),
     onAddPreset: vi.fn(),
     onChangePreset: vi.fn(),
@@ -283,12 +285,12 @@ describe('promptPanel', () => {
       });
     });
 
-    it('sets a preset to untick after use from the badge editor', async () => {
+    it('sets a preset to go out once per chat from the badge editor', async () => {
       const user = userEvent.setup();
       const { props } = renderPanel({ presets });
 
       await user.click(screen.getByRole('button', { name: 'English' }));
-      await user.click(screen.getByRole('switch', { name: 'Use once' }));
+      await user.click(screen.getByRole('switch', { name: 'Use once per chat' }));
 
       await waitFor(() => {
         expect(props.onChangePreset).toHaveBeenCalledWith(
@@ -359,6 +361,49 @@ describe('promptPanel', () => {
       renderPanel({
         presets: [preset({ id: 'terse', name: 'Terse', overrideOthers: true }), preset()],
         activePrompts: ['english'],
+      });
+
+      expect(
+        screen.getByRole('button', { name: 'English' }).parentElement,
+      ).not.toHaveClass('opacity-50');
+    });
+
+    it('keeps a used preset ticked but faded, with a button to send it again', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({
+        presets: [preset({ sendOnce: true })],
+        activePrompts: ['english'],
+        usedPrompts: ['english'],
+      });
+
+      expect(screen.getByRole('checkbox', { name: 'Use English' })).toBeChecked();
+      expect(screen.getByRole('button', { name: 'English' })).toHaveClass('opacity-50');
+
+      await user.click(screen.getByRole('button', { name: 'Send English again' }));
+
+      expect(props.onReusePreset).toHaveBeenCalledWith('english');
+      expect(props.onTogglePreset).not.toHaveBeenCalled();
+    });
+
+    it('offers no resend for a preset that has not gone out yet', () => {
+      renderPanel({
+        presets: [preset({ sendOnce: true })],
+        activePrompts: ['english'],
+      });
+
+      expect(
+        screen.queryByRole('button', { name: 'Send English again' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('lets the others go out while a used overriding preset sits out', () => {
+      renderPanel({
+        presets: [
+          preset({ id: 'terse', name: 'Terse', sendOnce: true, overrideOthers: true }),
+          preset(),
+        ],
+        activePrompts: ['terse', 'english'],
+        usedPrompts: ['terse'],
       });
 
       expect(

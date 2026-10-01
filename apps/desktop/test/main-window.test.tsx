@@ -335,7 +335,7 @@ describe('main window', () => {
     expect(guestRun.mock.calls[0]?.[1]).toContain('Be terse.');
   });
 
-  it('unticks a use-once preset after sending, even across New Chat, until reticked', async () => {
+  it('sends a use-once preset once per chat, keeping it ticked, until sent again or New Chat', async () => {
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
       stub({
@@ -359,27 +359,73 @@ describe('main window', () => {
     await waitForPanes();
     const textbox = screen.getByPlaceholderText(/Ask every enabled model/u);
 
+    const submit = async (text: string) => {
+      await user.type(textbox, text);
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+    };
+
+    await submit('first');
+    expect(screen.getByRole('checkbox', { name: 'Use Terse' })).toBeChecked();
+    expect(settingsSave).not.toHaveBeenCalled();
+    await submit('second');
+    await user.click(screen.getByRole('button', { name: 'Send Terse again' }));
+    await submit('third');
+    await submit('fourth');
+    await user.click(screen.getByRole('button', { name: 'New Chat' }));
+    expect(
+      screen.queryByRole('button', { name: 'Send Terse again' }),
+    ).not.toBeInTheDocument();
+    await submit('fifth');
+
+    await waitFor(() => {
+      expect(guestRun).toHaveBeenCalledTimes(5);
+    });
+    const scripts = guestRun.mock.calls.map((call) => String(call[1]));
+    expect(scripts.map((script) => script.includes('Be terse.'))).toStrictEqual([
+      true,
+      false,
+      true,
+      false,
+      true,
+    ]);
+  });
+
+  it('sends a used preset again once it is unticked and ticked afresh', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        activeWebsites: ['claude'],
+        prompts: [
+          {
+            id: 'terse',
+            name: 'Terse',
+            value: 'Be terse.',
+            location: 'start',
+            sendOnce: true,
+            untickOnNewChat: false,
+            overrideOthers: false,
+          },
+        ],
+        activePrompts: ['terse'],
+      }),
+    );
+    render(<App />);
+    await waitForPanes();
+    const textbox = screen.getByPlaceholderText(/Ask every enabled model/u);
+    const checkbox = screen.getByRole('checkbox', { name: 'Use Terse' });
+
     await user.type(textbox, 'first');
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(screen.getByRole('checkbox', { name: 'Use Terse' })).not.toBeChecked();
-    expect(settingsSave).toHaveBeenCalledWith({ activePrompts: [] });
+    await user.click(checkbox);
+    await user.click(checkbox);
     await user.type(textbox, 'second');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    await user.click(screen.getByRole('button', { name: 'New Chat' }));
-    await user.type(textbox, 'third');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Use Terse' }));
-    await user.type(textbox, 'fourth');
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(4);
+      expect(guestRun).toHaveBeenCalledTimes(2);
     });
-    const scripts = guestRun.mock.calls.map((call) => String(call[1]));
-    expect(scripts[0]).toContain('Be terse.');
-    expect(scripts[1]).not.toContain('Be terse.');
-    expect(scripts[2]).not.toContain('Be terse.');
-    expect(scripts[3]).toContain('Be terse.');
+    expect(String(guestRun.mock.calls[1]?.[1])).toContain('Be terse.');
   });
 
   it('sends only the overriding preset while it is ticked', async () => {

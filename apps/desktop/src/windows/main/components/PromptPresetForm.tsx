@@ -185,8 +185,8 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
 
       <PresetSwitch
         id={`${preset.id}-send-once`}
-        label="Use once"
-        description="Unticks after this prompt is sent. Tick it again to include it in another message."
+        label="Use once per chat"
+        description="Goes out with the next message only, then stays ticked but greyed out until New Chat or a new window. Click ↻ on it to send it once more in this chat."
         checked={draft.sendOnce}
         onCheckedChange={handleChangeSendOnce}
       />

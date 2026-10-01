@@ -5,7 +5,7 @@ import type {
 } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../types/prompt-editor';
-import { overridingPrompts } from '@internal/multi-mind';
+import { overridingPrompts, unusedPrompts } from '@internal/multi-mind';
 import { Button } from '@pixpilot/shadcn-ui';
 import { Library, SendHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,6 +29,8 @@ interface PromptPanelProps {
   presets: readonly PromptPreset[];
   /** Ids of the presets that are wrapping the prompt. */
   activePrompts: readonly string[];
+  /** Ids of the use-once presets already sent in this chat. */
+  usedPrompts: readonly string[];
   onChange: (value: string) => void;
   onActivate: () => void;
   onSubmit: () => void;
@@ -36,6 +38,8 @@ interface PromptPanelProps {
   onNextPrompt: () => void;
   onDismiss: () => void;
   onTogglePreset: (promptId: string) => void;
+  /** Lets a used preset go out with one more message in this chat. */
+  onReusePreset: (promptId: string) => void;
   onMovePreset: (activeId: string, overId: string) => void;
   onAddPreset: (preset: PromptPreset) => void;
   onChangePreset: (promptId: string, draft: PromptPresetDraft) => void;
@@ -55,6 +59,7 @@ export function PromptPanel({
   heightPercent,
   presets,
   activePrompts,
+  usedPrompts,
   onChange,
   onActivate,
   onSubmit,
@@ -62,6 +67,7 @@ export function PromptPanel({
   onNextPrompt,
   onDismiss,
   onTogglePreset,
+  onReusePreset,
   onMovePreset,
   onAddPreset,
   onChangePreset,
@@ -72,10 +78,16 @@ export function PromptPanel({
   const openManager = useCallback(() => setManagerOpen(true), []);
   const selectAll = useCallback(() => editorRef.current?.selectAll(), [editorRef]);
   const handleThirdClick = useThirdClickHandler(selectAll);
+  // A used preset is not going out, so it cannot leave the others out either.
   const overriding = useMemo(
     () =>
-      overridingPrompts(presets.filter((preset) => activePrompts.includes(preset.id))),
-    [activePrompts, presets],
+      overridingPrompts(
+        unusedPrompts(
+          presets.filter((preset) => activePrompts.includes(preset.id)),
+          usedPrompts,
+        ),
+      ),
+    [activePrompts, presets, usedPrompts],
   );
 
   /*
@@ -115,8 +127,10 @@ export function PromptPanel({
         <PromptPresetBar
           presets={presets}
           activePrompts={activePrompts}
+          usedPrompts={usedPrompts}
           overriding={overriding}
           onToggle={onTogglePreset}
+          onReuse={onReusePreset}
           onMove={onMovePreset}
           onChange={onChangePreset}
           onRemove={onRemovePreset}
@@ -147,9 +161,11 @@ export function PromptPanel({
         onOpenChange={setManagerOpen}
         presets={presets}
         activePrompts={activePrompts}
+        usedPrompts={usedPrompts}
         overriding={overriding}
         onAdd={onAddPreset}
         onToggle={onTogglePreset}
+        onReuse={onReusePreset}
         onChange={onChangePreset}
         onRemove={onRemovePreset}
       />

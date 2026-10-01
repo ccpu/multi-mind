@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { promptPresetLabel } from '@internal/multi-mind';
 import { Checkbox, cn } from '@pixpilot/shadcn';
 import { Popover, PopoverContent, PopoverTrigger } from '@pixpilot/shadcn-ui';
+import { RotateCcw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { OverriddenTooltip } from './OverriddenTooltip';
 import { promptSurface } from './prompt-surface';
@@ -45,9 +46,12 @@ function BadgeShell({
 interface PromptPresetBadgeProps {
   preset: PromptPreset;
   checked: boolean;
+  /** A ticked use-once preset that has already gone out in this chat. */
+  used: boolean;
   /** The ticked presets leaving this one out; empty when nothing does. */
   overriddenBy: readonly PromptPreset[];
   onToggle: (promptId: string) => void;
+  onReuse: (promptId: string) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
   onRemove: (promptId: string) => void;
 }
@@ -57,19 +61,27 @@ interface PromptPresetBadgeProps {
  * prompt, and a name that opens the editor over the badge itself, so a wording
  * can be fixed without leaving the prompt. Dragging it reorders the library.
  * It has to sit inside the bar's `SortableContext`.
+ *
+ * A use-once preset that has gone out stays ticked but fades, and grows a
+ * button that lets it go out with one more message.
  */
 export function PromptPresetBadge({
   preset,
   checked,
+  used,
   overriddenBy,
   onToggle,
+  onReuse,
   onChange,
   onRemove,
 }: PromptPresetBadgeProps) {
   const [open, setOpen] = useState(false);
   const label = promptPresetLabel(preset);
+  const overridden = overriddenBy.length > 0;
 
   const handleToggle = useCallback(() => onToggle(preset.id), [onToggle, preset.id]);
+
+  const handleReuse = useCallback(() => onReuse(preset.id), [onReuse, preset.id]);
 
   const handleChange = useCallback(
     (draft: PromptPresetDraft) => onChange(preset.id, draft),
@@ -97,7 +109,7 @@ export function PromptPresetBadge({
           ref={setNodeRef}
           {...listeners}
           checked={checked}
-          overridden={overriddenBy.length > 0}
+          overridden={overridden}
           style={{ transform: CSS.Translate.toString(transform), transition }}
           className={cn(
             'cursor-grab',
@@ -105,13 +117,30 @@ export function PromptPresetBadge({
           )}
         >
           <Checkbox
-            className="size-3.5"
+            className={cn('size-3.5', used && !overridden && 'opacity-50')}
             checked={checked}
             aria-label={`Use ${label}`}
             onCheckedChange={handleToggle}
           />
+          {used && (
+            <button
+              type="button"
+              aria-label={`Send ${label} again`}
+              title={`Send ${label} again with the next message`}
+              className="text-muted-foreground hover:text-foreground"
+              onClick={handleReuse}
+            >
+              <RotateCcw className="size-3" />
+            </button>
+          )}
           <PopoverTrigger asChild>
-            <button type="button" title={`Edit ${label}`} className="max-w-40 truncate">
+            <button
+              type="button"
+              title={
+                used ? `${label} was sent in this chat. Click to edit.` : `Edit ${label}` //
+              }
+              className={cn('max-w-40 truncate', used && !overridden && 'opacity-50')}
+            >
               {label}
             </button>
           </PopoverTrigger>
@@ -137,11 +166,13 @@ export function PromptPresetBadge({
 export function PromptPresetBadgeGhost({
   preset,
   checked,
-}: Pick<PromptPresetBadgeProps, 'checked' | 'preset'>) {
+  used,
+}: Pick<PromptPresetBadgeProps, 'checked' | 'preset' | 'used'>) {
   return (
     <BadgeShell checked={checked}>
       <span className="size-3.5" />
       <span className="max-w-40 truncate">{promptPresetLabel(preset)}</span>
+      {used && <span className="size-3" />}
     </BadgeShell>
   );
 }

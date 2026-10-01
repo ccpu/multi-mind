@@ -1,5 +1,9 @@
 import type { PromptPreset, PromptPresetDraft } from '@internal/multi-mind';
-import { createPromptPreset, promptOverriddenBy } from '@internal/multi-mind';
+import {
+  createPromptPreset,
+  isPromptUsed,
+  promptOverriddenBy,
+} from '@internal/multi-mind';
 import {
   Button,
   Dialog,
@@ -20,10 +24,13 @@ interface PromptPresetsDialogProps {
   onOpenChange: (open: boolean) => void;
   presets: readonly PromptPreset[];
   activePrompts: readonly string[];
+  /** Ids of the use-once presets already sent in this chat. */
+  usedPrompts: readonly string[];
   /** The ticked presets leaving every other one out. */
   overriding: readonly PromptPreset[];
   onAdd: (preset: PromptPreset) => void;
   onToggle: (promptId: string) => void;
+  onReuse: (promptId: string) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
   onRemove: (promptId: string) => void;
 }
@@ -38,9 +45,11 @@ export function PromptPresetsDialog({
   onOpenChange,
   presets,
   activePrompts,
+  usedPrompts,
   overriding,
   onAdd,
   onToggle,
+  onReuse,
   onChange,
   onRemove,
 }: PromptPresetsDialogProps) {
@@ -90,10 +99,14 @@ export function PromptPresetsDialog({
                   key={preset.id}
                   preset={preset}
                   checked={activePrompts.includes(preset.id)}
+                  used={
+                    activePrompts.includes(preset.id) && isPromptUsed(preset, usedPrompts)
+                  }
                   overriddenBy={promptOverriddenBy(preset, overriding)}
                   expanded={expandedId === preset.id}
                   onToggleExpanded={handleToggleExpanded}
                   onToggle={onToggle}
+                  onReuse={onReuse}
                   onChange={onChange}
                   onRemove={handleRemove}
                 />

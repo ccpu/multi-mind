@@ -29,6 +29,7 @@ import { useGuestPanes } from './hooks/useGuestPanes';
 import { useOverlayPresence } from './hooks/useOverlayPresence';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useSplitLayout } from './hooks/useSplitLayout';
+import { useUsedPresets } from './hooks/useUsedPresets';
 
 /**
  * Port of `Multi Mind/MainForm.cs`. The three docked WinForms panels become three
@@ -44,13 +45,19 @@ function App() {
     toggleWebsite,
     openWebsites,
     togglePreset,
-    untickSentOncePresets,
     untickChatPresets,
     movePreset,
     addPreset,
     updatePreset,
     removePreset,
   } = useAppSettings();
+  const {
+    usedPrompts,
+    unused: unusedPresets,
+    markSent: markPresetsSent,
+    reuse: reusePreset,
+    reset: resetUsedPresets,
+  } = useUsedPresets();
   useDownloadToasts();
   const [prompt, setPrompt] = useState('');
   const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
@@ -196,20 +203,21 @@ function App() {
    * reason not to send: what has to be there is the composed text, not the
    * typed text.
    *
-   * A use-once preset is unticked after it is sent. A ticked overriding
-   * preset leaves the other ticked ones out altogether.
+   * A use-once preset stays ticked after it is sent, but sits out the rest of
+   * the chat. A ticked overriding preset leaves the other ticked ones out
+   * altogether.
    */
   const runPrompt = useCallback(() => {
     const typedPrompt = promptTextRef.current;
     const guestGlobals = guestConfigRef.current;
-    const presets = promptsToSend(getActivePrompts(settingsRef.current));
+    const presets = promptsToSend(unusedPresets(getActivePrompts(settingsRef.current)));
     const composed = composePrompt(typedPrompt, presets);
 
     if (composed === '' || guestGlobals === null) {
       return;
     }
 
-    untickSentOncePresets(presets);
+    markPresetsSent(presets);
 
     const websites = getActiveWebsites(settingsRef.current);
     const savePrompt = recordPrompt(
@@ -245,7 +253,7 @@ function App() {
 
     setPrompt('');
     setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, [dismissPromptError, recordPrompt, untickSentOncePresets]);
+  }, [dismissPromptError, markPresetsSent, recordPrompt, unusedPresets]);
 
   /** Reopens saved conversations, enabling and opening their providers first. */
   const openConversations = useCallback(
@@ -264,17 +272,27 @@ function App() {
 
   /**
    * Port of `WebViewManager.Reload`. A new chat unticks the presets that only
-   * last for one chat.
+   * last for one chat, and lets the use-once ones go out again.
    */
   const handleReload = useCallback(() => {
     untickChatPresets();
+    resetUsedPresets();
     getActiveWebsites(settingsRef.current).forEach((website) => {
       stopTracking(website.id);
       appApi.guest.navigate(website.id, website.url).catch((error: unknown) => {
         console.error(`Failed to reload ${website.name}:`, error);
       });
     });
-  }, [stopTracking, untickChatPresets]);
+  }, [resetUsedPresets, stopTracking, untickChatPresets]);
+
+  /** Ticking a preset afresh, either way, means it should go out again. */
+  const handleTogglePreset = useCallback(
+    (promptId: string) => {
+      reusePreset(promptId);
+      togglePreset(promptId);
+    },
+    [reusePreset, togglePreset],
+  );
 
   const goLastPrompt = useCallback(() => {
     historyRef.current.previous();
@@ -355,13 +373,15 @@ function App() {
         heightPercent={bottomPercent}
         presets={settings.prompts}
         activePrompts={settings.activePrompts}
+        usedPrompts={usedPrompts}
         onChange={handlePromptChange}
         onActivate={expandPrompt}
         onSubmit={runPrompt}
         onPreviousPrompt={goLastPrompt}
         onNextPrompt={goNextPrompt}
         onDismiss={collapsePrompt}
-        onTogglePreset={togglePreset}
+        onTogglePreset={handleTogglePreset}
+        onReusePreset={reusePreset}
         onMovePreset={movePreset}
         onAddPreset={addPreset}
         onChangePreset={updatePreset}

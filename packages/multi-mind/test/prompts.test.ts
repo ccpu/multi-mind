@@ -4,6 +4,7 @@ import {
   BLANK_PROMPT_PRESET,
   composePrompt,
   createPromptPreset,
+  isPromptUsed,
   normalizePromptPreset,
   normalizePromptPresets,
   overridingPrompts,
@@ -11,6 +12,7 @@ import {
   promptPresetLabel,
   promptsToSend,
   UNTITLED_PROMPT_NAME,
+  unusedPrompts,
 } from '../src/prompts';
 
 function preset(overrides: Partial<PromptPreset> = {}): PromptPreset {
@@ -126,6 +128,25 @@ describe('promptsToSend', () => {
     const second = preset({ id: 'second', overrideOthers: true });
 
     expect(promptsToSend([alone, other, second])).toStrictEqual([alone, second]);
+  });
+});
+
+describe('unusedPrompts', () => {
+  const once = preset({ id: 'once', sendOnce: true });
+  const always = preset({ id: 'always' });
+
+  it('leaves out a use-once preset already sent in this chat', () => {
+    expect(isPromptUsed(once, ['once'])).toBe(true);
+    expect(unusedPrompts([once, always], ['once'])).toStrictEqual([always]);
+  });
+
+  it('keeps a use-once preset that has not been sent yet', () => {
+    expect(unusedPrompts([once, always], [])).toStrictEqual([once, always]);
+  });
+
+  it('keeps a preset that is no longer set to send once', () => {
+    expect(isPromptUsed(always, ['always'])).toBe(false);
+    expect(unusedPrompts([always], ['always'])).toStrictEqual([always]);
   });
 });
 

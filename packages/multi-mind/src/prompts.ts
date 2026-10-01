@@ -28,7 +28,11 @@ export interface PromptPreset {
   readonly value: string;
   /** Which side of the typed prompt {@link value} goes on. */
   readonly location: PromptLocation;
-  /** Whether the preset is unticked after it is included in a sent message. */
+  /**
+   * Whether the preset goes out with one message per chat. It stays ticked,
+   * but is left out once it has been sent, until **New Chat**, a new window,
+   * or the user asks for it again.
+   */
   readonly sendOnce: boolean;
   /**
    * Whether **New Chat** unticks the preset, so it only lasts for the chat it
@@ -121,6 +125,26 @@ export function normalizePromptPresets(value: unknown): PromptPreset[] {
 
     return presets;
   }, []);
+}
+
+/**
+ * Whether a use-once preset has already gone out in this chat. `usedPrompts`
+ * holds the ids of the presets sent so far; it only counts for a preset that
+ * is still set to send once.
+ */
+export function isPromptUsed(
+  preset: PromptPreset,
+  usedPrompts: readonly string[],
+): boolean {
+  return preset.sendOnce && usedPrompts.includes(preset.id);
+}
+
+/** The ticked presets still to go out in this chat. */
+export function unusedPrompts(
+  ticked: readonly PromptPreset[],
+  usedPrompts: readonly string[],
+): PromptPreset[] {
+  return ticked.filter((preset) => !isPromptUsed(preset, usedPrompts));
 }
 
 /** The ticked presets that leave the rest out. */

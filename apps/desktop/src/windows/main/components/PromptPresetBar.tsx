@@ -17,7 +17,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { promptOverriddenBy } from '@internal/multi-mind';
+import { isPromptUsed, promptOverriddenBy } from '@internal/multi-mind';
 import { Popover, PopoverContent, PopoverTrigger } from '@pixpilot/shadcn-ui';
 import { MoreHorizontal } from 'lucide-react';
 import { useCallback } from 'react';
@@ -28,9 +28,12 @@ import { PromptPresetBadge, PromptPresetBadgeGhost } from './PromptPresetBadge';
 interface PromptPresetBarProps {
   presets: readonly PromptPreset[];
   activePrompts: readonly string[];
+  /** Ids of the use-once presets already sent in this chat. */
+  usedPrompts: readonly string[];
   /** The ticked presets leaving every other one out. */
   overriding: readonly PromptPreset[];
   onToggle: (promptId: string) => void;
+  onReuse: (promptId: string) => void;
   /** Moves the dragged preset to where the one it was dropped on is. */
   onMove: (activeId: string, overId: string) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
@@ -60,8 +63,10 @@ const OVERFLOW_MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 export function PromptPresetBar({
   presets,
   activePrompts,
+  usedPrompts,
   overriding,
   onToggle,
+  onReuse,
   onMove,
   onChange,
   onRemove,
@@ -88,13 +93,18 @@ export function PromptPresetBar({
     return null;
   }
 
+  const isUsed = (preset: PromptPreset) =>
+    activePrompts.includes(preset.id) && isPromptUsed(preset, usedPrompts);
+
   const badge = (preset: PromptPreset) => (
     <PromptPresetBadge
       key={preset.id}
       preset={preset}
       checked={activePrompts.includes(preset.id)}
+      used={isUsed(preset)}
       overriddenBy={promptOverriddenBy(preset, overriding)}
       onToggle={onToggle}
+      onReuse={onReuse}
       onChange={onChange}
       onRemove={onRemove}
     />
@@ -168,6 +178,7 @@ export function PromptPresetBar({
             key={preset.id}
             preset={preset}
             checked={activePrompts.includes(preset.id)}
+            used={isUsed(preset)}
           />
         ))}
         <span className={OVERFLOW_BUTTON_CLASS}>

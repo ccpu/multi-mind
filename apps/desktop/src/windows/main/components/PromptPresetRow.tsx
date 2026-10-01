@@ -1,7 +1,8 @@
 import type { PromptPreset, PromptPresetDraft } from '@internal/multi-mind';
 import { PROMPT_LOCATION_OPTIONS, promptPresetLabel } from '@internal/multi-mind';
 import { Checkbox, cn } from '@pixpilot/shadcn';
-import { ChevronRight } from 'lucide-react';
+import { Button } from '@pixpilot/shadcn-ui';
+import { ChevronRight, RotateCcw } from 'lucide-react';
 import { useCallback } from 'react';
 import { OverriddenTooltip } from './OverriddenTooltip';
 import { PromptPresetForm } from './PromptPresetForm';
@@ -9,11 +10,14 @@ import { PromptPresetForm } from './PromptPresetForm';
 interface PromptPresetRowProps {
   preset: PromptPreset;
   checked: boolean;
+  /** A ticked use-once preset that has already gone out in this chat. */
+  used: boolean;
   /** The ticked presets leaving this one out; empty when nothing does. */
   overriddenBy: readonly PromptPreset[];
   expanded: boolean;
   onToggleExpanded: (promptId: string) => void;
   onToggle: (promptId: string) => void;
+  onReuse: (promptId: string) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
   onRemove: (promptId: string) => void;
 }
@@ -29,14 +33,21 @@ function locationLabel(preset: PromptPreset): string {
 export function PromptPresetRow({
   preset,
   checked,
+  used,
   overriddenBy,
   expanded,
   onToggleExpanded,
   onToggle,
+  onReuse,
   onChange,
   onRemove,
 }: PromptPresetRowProps) {
   const label = promptPresetLabel(preset);
+
+  // An overridden row is greyed out whole already.
+  const dimUsed = used && overriddenBy.length === 0;
+
+  const handleReuse = useCallback(() => onReuse(preset.id), [onReuse, preset.id]);
 
   const handleToggleExpanded = useCallback(
     () => onToggleExpanded(preset.id),
@@ -62,6 +73,7 @@ export function PromptPresetRow({
           )}
         >
           <Checkbox
+            className={cn(dimUsed && 'opacity-50')}
             checked={checked}
             aria-label={`Use ${label}`}
             onCheckedChange={handleToggle}
@@ -70,7 +82,10 @@ export function PromptPresetRow({
           <button
             type="button"
             aria-expanded={expanded}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left"
+            className={cn(
+              'flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left',
+              dimUsed && 'opacity-50',
+            )}
             onClick={handleToggleExpanded}
           >
             <ChevronRight
@@ -84,6 +99,19 @@ export function PromptPresetRow({
               {preset.value === '' ? locationLabel(preset) : preset.value}
             </span>
           </button>
+
+          {used && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Send ${label} again`}
+              title={`${label} was sent in this chat. Send it again with the next message.`}
+              onClick={handleReuse}
+            >
+              <RotateCcw />
+              Send again
+            </Button>
+          )}
         </div>
       </OverriddenTooltip>
 

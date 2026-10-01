@@ -16,7 +16,6 @@ import {
   togglePrompt,
   toggleWebsite,
   untickChatPrompts,
-  untickSentOncePrompts,
   updatePrompt,
   updateWebsite,
 } from '../src/settings';
@@ -318,22 +317,6 @@ describe('prompt presets', () => {
     };
 
     expect(untickChatPrompts(settings).activePrompts).toStrictEqual(['english']);
-  });
-
-  it('unticks only use-once presets included in the sent message', () => {
-    const once = { ...english, sendOnce: true };
-    const settings = {
-      ...withPrompts(['english', 'terse']),
-      prompts: [once, terse],
-    };
-
-    expect(untickSentOncePrompts(settings, [once, terse]).activePrompts).toStrictEqual([
-      'terse',
-    ]);
-    expect(untickSentOncePrompts(settings, [terse]).activePrompts).toStrictEqual([
-      'english',
-      'terse',
-    ]);
   });
 
   it('moves the dragged preset onto the position it was dropped on', () => {
