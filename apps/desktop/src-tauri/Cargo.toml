@@ -45,7 +45,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # different, incompatible type.
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
-windows-core = "0.61"
+windows-core = "0.62"
 
 # Updating and staying in one process are desktop-only concerns; on mobile
 # there is no second launch to hand over and no installer to replace. Spelt out
