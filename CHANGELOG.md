@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/ccpu/multi-mind/compare/v1.12.0...v1.13.0) (2026-10-01)
+
+
+### Features
+
+* **prompts:** send use-once presets once per chat ([e0fd225](https://github.com/ccpu/multi-mind/commit/e0fd22588721fda025c8ebfa9bbdf8ed321c3298))
+
 # [1.12.0](https://github.com/ccpu/multi-mind/compare/v1.11.0...v1.12.0) (2026-09-30)
 
 
