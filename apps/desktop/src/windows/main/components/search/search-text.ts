@@ -36,6 +36,32 @@ export function openableConversations(
   );
 }
 
+/** Text to match literally inside a regular expression. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+/**
+ * The chat's captured title without the provider name a site may append to it,
+ * as in `Turbo caching - Claude`; empty when that name is all there is.
+ */
+export function chatTitle(entry: SearchEntry, websites: readonly WebsiteInfo[]): string {
+  const title = entry.title.replace(/\s+/gu, ' ').trim();
+  const names = websites
+    .filter(
+      (website) =>
+        website.name !== '' &&
+        entry.conversations.some((conversation) => conversation.websiteId === website.id),
+    )
+    .map((website) => escapeRegExp(website.name));
+  if (names.length === 0) {
+    return title;
+  }
+  const named = new RegExp(`^(?:(.*?)\\s*[-–—|:·]\\s*)?(?:${names.join('|')})$`, 'iu');
+  const match = named.exec(title);
+  return match === null ? title : (match[1] ?? '');
+}
+
 /**
  * The prompt on one line, starting shortly before the first match when that
  * match would otherwise fall past the two lines a result shows.
@@ -58,7 +84,7 @@ export function promptSnippet(prompt: string, terms: readonly string[]): string 
 export function highlightParts(text: string, terms: readonly string[]): TextPart[] {
   const pattern = [...terms]
     .sort((a, b) => b.length - a.length)
-    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+    .map(escapeRegExp)
     .join('|');
   if (pattern === '') {
     return [{ text, match: false }];

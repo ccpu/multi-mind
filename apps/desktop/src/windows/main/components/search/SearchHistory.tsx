@@ -16,9 +16,9 @@ interface SearchHistoryProps {
 }
 
 /**
- * Searches saved prompts from the navigation bar. Focusing it lists the most
- * recent ones; typing narrows them to prompts holding every word, in the prompt
- * or in the title or address of a conversation it started.
+ * Searches saved chats from the navigation bar. Focusing it lists the most
+ * recent ones; typing narrows them to chats holding every word, in one of
+ * their prompts or in the title or address of one of their conversations.
  */
 export function SearchHistory({ websites, onOpenConversations }: SearchHistoryProps) {
   const [query, setQuery] = useState('');
@@ -156,7 +156,7 @@ export function SearchHistory({ websites, onOpenConversations }: SearchHistoryPr
         )}
         {!error && recent && results.length > 0 && (
           <p className="px-3 pt-2 pb-1 text-xs font-medium text-muted-foreground">
-            Recent prompts
+            Recent chats
           </p>
         )}
         {!error &&

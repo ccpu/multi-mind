@@ -554,8 +554,9 @@ describe('main window', () => {
     searchPrompts.mockResolvedValue([
       {
         id: 12,
+        title: 'Comparison',
         prompt: 'Compare these',
-        createdAt: '2026-09-25 10:00:00',
+        updatedAt: '2026-09-25 10:00:00',
         conversations: [
           {
             id: 3,
@@ -588,7 +589,7 @@ describe('main window', () => {
     });
   });
 
-  it('lists a prompt once with its providers and opens all or one of them', async () => {
+  it('lists a chat by its title and first prompt and opens all or one of its providers', async () => {
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
       stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
@@ -596,8 +597,10 @@ describe('main window', () => {
     searchPrompts.mockResolvedValue([
       {
         id: 12,
+        title: 'Turbo - ChatGPT',
         prompt: 'Cache turbo in CI',
-        createdAt: '2026-09-25 10:00:00',
+        matchedPrompt: 'And in GitHub Actions?',
+        updatedAt: '2026-09-25 10:00:00',
         conversations: [
           { id: 3, websiteId: 'claude', title: '', url: 'https://claude.ai/chat/1' },
           { id: 4, websiteId: 'chatgpt', title: 'Turbo', url: 'https://chatgpt.com/c/2' },
@@ -610,9 +613,14 @@ describe('main window', () => {
 
     // Focusing the empty box lists recent prompts.
     await user.click(screen.getByRole('textbox', { name: 'Search saved prompts' }));
-    expect(await screen.findByText('Recent prompts')).toBeInTheDocument();
+    expect(await screen.findByText('Recent chats')).toBeInTheDocument();
     expect(searchPrompts).toHaveBeenCalledWith('');
-    expect(screen.getAllByRole('button', { name: /Cache turbo in CI/u })).toHaveLength(1);
+    // The captured title, without the provider name, then the first prompt.
+    expect(
+      screen.getAllByRole('button', {
+        name: /^Turbo\s*Cache turbo in CI\s*↳ And in GitHub Actions\?$/u,
+      }),
+    ).toHaveLength(1);
     expect(
       screen.getByRole('button', { name: 'Open gemini conversation' }),
     ).toBeDisabled();

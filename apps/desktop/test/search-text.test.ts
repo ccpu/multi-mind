@@ -2,6 +2,7 @@ import type { WebsiteInfo } from '@internal/multi-mind';
 import { DEFAULT_WEBSITES } from '@internal/multi-mind';
 import { describe, expect, it } from 'vitest';
 import {
+  chatTitle,
   formatAge,
   highlightParts,
   openableConversations,
@@ -45,10 +46,27 @@ describe('search text', () => {
 
     expect(
       openableConversations(
-        { id: 1, prompt: '', createdAt: '', conversations },
+        { id: 1, title: '', prompt: '', updatedAt: '', conversations },
         websites,
       ).map((conversation) => conversation.id),
     ).toEqual([1]);
+  });
+
+  it('drops the provider name a site appends to a chat title', () => {
+    const entry = (title: string) => ({
+      id: 1,
+      title,
+      prompt: '',
+      updatedAt: '',
+      conversations: [{ id: 1, websiteId: 'claude', title, url: '' }],
+    });
+
+    expect(chatTitle(entry('Turbo  caching - Claude'), DEFAULT_WEBSITES)).toBe(
+      'Turbo caching',
+    );
+    expect(chatTitle(entry('Claude'), DEFAULT_WEBSITES)).toBe('');
+    expect(chatTitle(entry('Turbo - ChatGPT'), DEFAULT_WEBSITES)).toBe('Turbo - ChatGPT');
+    expect(chatTitle(entry('Turbo - Claude'), [])).toBe('Turbo - Claude');
   });
 
   it('formats the age of a SQLite UTC timestamp', () => {

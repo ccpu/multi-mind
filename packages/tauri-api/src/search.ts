@@ -8,12 +8,21 @@ export interface SearchConversation {
   url: string;
 }
 
-/** One submitted prompt and every conversation it started. */
+/**
+ * One chat: the prompts that continued the same conversations, listed by the
+ * first of them, with the latest conversation it has on each provider.
+ */
 export interface SearchEntry {
+  /** The first prompt's ID. */
   id: number;
+  /** A page title captured on one of the chat's conversations, or empty. */
+  title: string;
+  /** The first prompt sent in the chat. */
   prompt: string;
-  /** SQLite UTC timestamp, `YYYY-MM-DD HH:MM:SS`. */
-  createdAt: string;
+  /** A later prompt that matches the search better than the first one. */
+  matchedPrompt?: string;
+  /** When the latest prompt was sent, as a SQLite UTC timestamp, `YYYY-MM-DD HH:MM:SS`. */
+  updatedAt: string;
   conversations: SearchConversation[];
 }
 
@@ -40,8 +49,8 @@ export async function searchUpdateConversation(
 }
 
 /**
- * Finds prompts whose text, conversation titles, or URLs hold every word of the
- * query, best matches first. An empty query lists the most recent prompts.
+ * Finds chats whose prompts, conversation titles, or URLs hold every word of
+ * the query, best matches first. An empty query lists the most recent chats.
  */
 export async function searchPrompts(query: string): Promise<SearchEntry[]> {
   return invoke<SearchEntry[]>('search_prompts', { query });

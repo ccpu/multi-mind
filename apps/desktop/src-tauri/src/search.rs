@@ -2,22 +2,24 @@
 //! these commands; guest pages report metadata through the existing bridge.
 //!
 //! Each submission is one `prompts` row, and each provider that accepted it is
-//! one `conversations` row, so a prompt sent to several providers is found and
-//! listed once, with every conversation it started.
+//! one `conversations` row, so a prompt sent to several providers is saved
+//! once, with every conversation it started. Search lists chats: prompts that
+//! continued the same conversations are found and listed together, by the
+//! first of them.
 
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use rusqlite::{params, params_from_iter, Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
 use tauri::State;
 use url::Url;
 
 const DATABASE_FILE_NAME: &str = "search.sqlite3";
-/// Prompts listed while the search box is empty.
+/// Chats listed while the search box is empty.
 const RECENT_LIMIT: usize = 20;
 /// Newest matches that are ranked; older ones are left out.
 const CANDIDATE_LIMIT: usize = 300;
@@ -28,7 +30,7 @@ const MAX_TERMS: usize = 8;
 /// same prompt are taken to be one submission when they are grouped.
 const LEGACY_GROUP_SECONDS: i64 = 60;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchConversation {
     id: i64,
@@ -37,15 +39,36 @@ pub struct SearchConversation {
     url: String,
 }
 
-/// One submitted prompt with the conversation it started on each provider.
+/// One chat, listed by its first prompt, with the latest conversation it has
+/// on each provider.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEntry {
+    /// The first prompt's row ID.
     id: i64,
+    /// A page title captured on one of the chat's conversations, or empty.
+    title: String,
+    /// The first prompt sent in the chat.
     prompt: String,
-    /// SQLite UTC timestamp, `YYYY-MM-DD HH:MM:SS`.
-    created_at: String,
+    /// A later prompt that matches the search better than the first one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matched_prompt: Option<String>,
+    /// When the latest prompt was sent, as a SQLite UTC timestamp,
+    /// `YYYY-MM-DD HH:MM:SS`.
+    updated_at: String,
     conversations: Vec<SearchConversation>,
+}
+
+/// Every saved prompt, oldest first and without its text, grouped into chats.
+struct History {
+    /// `(id, created_at)` of each prompt.
+    prompts: Vec<(i64, String)>,
+    /// Each prompt's conversations, by position in `prompts`.
+    conversations: Vec<Vec<SearchConversation>>,
+    /// Each chat's prompt positions, oldest first; the latest chat comes first.
+    chats: Vec<Vec<usize>>,
+    /// Each chat's title, by position in `chats`.
+    titles: Vec<String>,
 }
 
 /// A prompt as copied between databases, without its row IDs.
@@ -177,56 +200,100 @@ impl SearchStore {
         Ok(())
     }
 
-    /// Every word must appear in the prompt or in one of its conversation
-    /// titles or URLs. Results are ranked by where the words were found, newest
-    /// first within a rank; an empty query lists the most recent prompts.
+    /// Every word must appear in one of a chat's prompts or in one of its
+    /// conversation titles or URLs. Results are ranked by where the words were
+    /// found, latest chat first within a rank; an empty query lists the most
+    /// recent chats.
     fn search(&self, query: &str) -> Result<Vec<SearchEntry>, String> {
         let database = self.0.lock().map_err(|error| error.to_string())?;
         let connection = &database.connection;
+        let history = load_history(connection)?;
         let terms = search_terms(query);
         if terms.is_empty() {
-            return load_entries(
-                connection,
-                &format!(
-                    "SELECT id, prompt, created_at FROM prompts
-                     ORDER BY created_at DESC, id DESC LIMIT {RECENT_LIMIT}"
-                ),
-                Vec::new(),
-            );
+            return (0..history.chats.len().min(RECENT_LIMIT))
+                .map(|index| {
+                    let first = history.prompts[history.chats[index][0]].0;
+                    Ok(history.entry(index, prompt_text(connection, first)?, None))
+                })
+                .collect();
         }
 
-        let conditions = (1..=terms.len())
-            .map(|index| {
-                format!(
-                    "(p.prompt LIKE ?{index} ESCAPE '\\' OR EXISTS (
-                        SELECT 1 FROM conversations c WHERE c.prompt_id = p.id
-                        AND (c.title LIKE ?{index} ESCAPE '\\' OR c.url LIKE ?{index} ESCAPE '\\')))"
-                )
+        // The prompts holding each word, matched in SQLite so their text
+        // is only read for the chats that hold every word.
+        let mut statement = connection
+            .prepare_cached("SELECT id FROM prompts WHERE prompt LIKE ?1 ESCAPE '\\'")
+            .map_err(|error| error.to_string())?;
+        let matches = terms
+            .iter()
+            .map(|term| {
+                statement
+                    .query_map(params![like_pattern(term)], |row| row.get::<_, i64>(0))?
+                    .collect::<Result<HashSet<_>, _>>()
             })
-            .collect::<Vec<_>>()
-            .join(" AND ");
-        let patterns = terms.iter().map(|term| like_pattern(term)).collect();
-        let entries = load_entries(
-            connection,
-            &format!(
-                "SELECT p.id, p.prompt, p.created_at FROM prompts p WHERE {conditions}
-                 ORDER BY p.created_at DESC, p.id DESC LIMIT {CANDIDATE_LIMIT}"
-            ),
-            patterns,
-        )?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
 
         let phrase = normalize(query);
-        let mut ranked = entries
-            .into_iter()
-            .map(|entry| (rank(&entry, &phrase, &terms), entry))
-            .collect::<Vec<_>>();
-        // Stable, so each rank keeps the newest-first order of the query.
+        let mut ranked = Vec::new();
+        for (index, chat) in history.chats.iter().enumerate() {
+            let conversations = chat
+                .iter()
+                .flat_map(|&position| &history.conversations[position])
+                .collect::<Vec<_>>();
+            let titles = conversations
+                .iter()
+                .map(|conversation| conversation.title.to_lowercase())
+                .collect::<Vec<_>>();
+            let urls = conversations
+                .iter()
+                .map(|conversation| conversation.url.to_lowercase())
+                .collect::<Vec<_>>();
+            let found = terms.iter().zip(&matches).all(|(term, ids)| {
+                chat.iter()
+                    .any(|&position| ids.contains(&history.prompts[position].0))
+                    || titles
+                        .iter()
+                        .chain(&urls)
+                        .any(|text| text.contains(term.as_str()))
+            });
+            if !found {
+                continue;
+            }
+
+            let mut prompts = chat
+                .iter()
+                .map(|&position| prompt_text(connection, history.prompts[position].0))
+                .collect::<Result<Vec<_>, _>>()?;
+            let (order, best) = rank(&prompts, &titles, &phrase, &terms);
+            let matched_prompt = best.map(|position| std::mem::take(&mut prompts[position]));
+            let first = prompts.swap_remove(0);
+            ranked.push((order, history.entry(index, first, matched_prompt)));
+            if ranked.len() == CANDIDATE_LIMIT {
+                break;
+            }
+        }
+        // Stable, so each rank keeps the latest-first order of the chats.
         ranked.sort_by_key(|(order, _)| Reverse(*order));
         Ok(ranked
             .into_iter()
             .take(RESULT_LIMIT)
             .map(|(_, entry)| entry)
             .collect())
+    }
+}
+
+impl History {
+    fn entry(&self, index: usize, prompt: String, matched_prompt: Option<String>) -> SearchEntry {
+        let chat = &self.chats[index];
+        let latest = chat[chat.len() - 1];
+        SearchEntry {
+            id: self.prompts[chat[0]].0,
+            title: self.titles[index].clone(),
+            prompt,
+            matched_prompt,
+            updated_at: self.prompts[latest].1.clone(),
+            conversations: latest_conversations(chat, &self.conversations),
+        }
     }
 }
 
@@ -311,73 +378,254 @@ fn normalize(text: &str) -> String {
         .to_lowercase()
 }
 
-/// 3: the prompt holds the query as typed. 2: the prompt holds every word.
-/// 1: every word is in the prompt or a conversation title. 0: a URL was needed.
-fn rank(entry: &SearchEntry, phrase: &str, terms: &[String]) -> u8 {
-    let prompt = normalize(&entry.prompt);
-    if prompt.contains(phrase) {
-        return 3;
-    }
-    if terms.iter().all(|term| prompt.contains(term.as_str())) {
-        return 2;
-    }
-    let titles = entry
-        .conversations
+/// Ranks a chat holding every word, given its prompts and lowercased titles.
+/// 3: a prompt holds the query as typed. 2: a prompt holds every word.
+/// 1: every word is in a prompt or a conversation title. 0: a URL was needed.
+///
+/// Also returns the earliest prompt that matches best, when that is a later
+/// one than the first.
+fn rank(
+    prompts: &[String],
+    titles: &[String],
+    phrase: &str,
+    terms: &[String],
+) -> (u8, Option<usize>) {
+    let prompts = prompts
         .iter()
-        .map(|conversation| conversation.title.to_lowercase())
+        .map(|prompt| normalize(prompt))
         .collect::<Vec<_>>();
+    let scores = prompts
+        .iter()
+        .map(|prompt| {
+            let words = terms
+                .iter()
+                .filter(|term| prompt.contains(term.as_str()))
+                .count();
+            (prompt.contains(phrase), words)
+        })
+        .collect::<Vec<_>>();
+    // The last of equal maximums, so the earliest prompt when counting down.
+    let best = (0..scores.len())
+        .rev()
+        .max_by_key(|&position| scores[position]);
+
     let in_text = |term: &String| {
-        prompt.contains(term.as_str()) || titles.iter().any(|title| title.contains(term.as_str()))
+        prompts
+            .iter()
+            .chain(titles)
+            .any(|text| text.contains(term.as_str()))
     };
-    if terms.iter().all(in_text) {
+    let order = if scores.iter().any(|(phrase, _)| *phrase) {
+        3
+    } else if scores.iter().any(|(_, words)| *words == terms.len()) {
+        2
+    } else if terms.iter().all(in_text) {
         1
     } else {
         0
-    }
+    };
+    (order, best.filter(|&position| position > 0))
 }
 
-/// Runs a query selecting `id, prompt, created_at` from `prompts` and attaches
-/// each prompt's conversations.
-fn load_entries(
-    connection: &Connection,
-    sql: &str,
-    parameters: Vec<String>,
-) -> Result<Vec<SearchEntry>, String> {
-    let mut statement = connection.prepare(sql).map_err(|error| error.to_string())?;
-    let mut entries = statement
-        .query_map(params_from_iter(parameters), |row| {
-            Ok(SearchEntry {
-                id: row.get(0)?,
-                prompt: row.get(1)?,
-                created_at: row.get(2)?,
-                conversations: Vec::new(),
-            })
+fn prompt_text(connection: &Connection, id: i64) -> Result<String, String> {
+    connection
+        .prepare_cached("SELECT prompt FROM prompts WHERE id = ?1")
+        .map_err(|error| error.to_string())?
+        .query_row(params![id], |row| row.get(0))
+        .map_err(|error| error.to_string())
+}
+
+/// Reads every prompt's age and conversations, without the prompt text, and
+/// groups them into chats.
+fn load_history(connection: &Connection) -> Result<History, String> {
+    let prompts = connection
+        .prepare_cached("SELECT id, created_at FROM prompts ORDER BY created_at, id")
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
         })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
+    let positions = prompts
+        .iter()
+        .enumerate()
+        .map(|(position, (id, _))| (*id, position))
+        .collect::<HashMap<_, _>>();
 
-    let mut conversations = connection
+    let mut conversations = vec![Vec::new(); prompts.len()];
+    let rows = connection
         .prepare_cached(
-            "SELECT id, website_id, title, url FROM conversations
-             WHERE prompt_id = ?1 ORDER BY id",
+            "SELECT id, prompt_id, website_id, title, url FROM conversations ORDER BY id",
         )
-        .map_err(|error| error.to_string())?;
-    for entry in &mut entries {
-        entry.conversations = conversations
-            .query_map(params![entry.id], |row| {
-                Ok(SearchConversation {
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(1)?,
+                SearchConversation {
                     id: row.get(0)?,
-                    website_id: row.get(1)?,
-                    title: row.get(2)?,
-                    url: row.get(3)?,
-                })
-            })
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
+                    website_id: row.get(2)?,
+                    title: row.get(3)?,
+                    url: row.get(4)?,
+                },
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    for (prompt_id, conversation) in rows {
+        if let Some(&position) = positions.get(&prompt_id) {
+            conversations[position].push(conversation);
+        }
     }
-    Ok(entries)
+
+    let chats = group_chats(&conversations);
+    let titles = chat_titles(&chats, &conversations);
+    Ok(History {
+        prompts,
+        conversations,
+        chats,
+        titles,
+    })
+}
+
+/// Groups prompts, given oldest first, into chats, latest chat first. A prompt
+/// continues an earlier one when one of its conversations has the same address
+/// on the same provider — unless the two have different addresses on another
+/// provider, as two chats do on a provider that keeps one address for all.
+fn group_chats(conversations: &[Vec<SearchConversation>]) -> Vec<Vec<usize>> {
+    let mut parent = (0..conversations.len()).collect::<Vec<_>>();
+    // Each group's address on each provider, kept on its root.
+    let mut addresses = conversations
+        .iter()
+        .map(|items| {
+            items
+                .iter()
+                .filter(|conversation| !conversation.url.is_empty())
+                .map(|conversation| (conversation.website_id.as_str(), conversation.url.as_str()))
+                .collect::<HashMap<_, _>>()
+        })
+        .collect::<Vec<_>>();
+    // The latest prompt with each address on each provider.
+    let mut owners = HashMap::new();
+    for (position, items) in conversations.iter().enumerate() {
+        for conversation in items
+            .iter()
+            .filter(|conversation| !conversation.url.is_empty())
+        {
+            let key = (conversation.website_id.as_str(), conversation.url.as_str());
+            if let Some(owner) = owners.insert(key, position) {
+                join(&mut parent, &mut addresses, owner, position);
+            }
+        }
+    }
+
+    let mut chats: Vec<Vec<usize>> = Vec::new();
+    let mut indexes = HashMap::new();
+    for position in 0..conversations.len() {
+        let root = find(&mut parent, position);
+        let index = *indexes.entry(root).or_insert_with(|| {
+            chats.push(Vec::new());
+            chats.len() - 1
+        });
+        chats[index].push(position);
+    }
+    chats.sort_by_key(|chat| Reverse(chat.last().copied()));
+    chats
+}
+
+fn find(parent: &mut [usize], mut position: usize) -> usize {
+    while parent[position] != position {
+        parent[position] = parent[parent[position]];
+        position = parent[position];
+    }
+    position
+}
+
+/// Joins the groups of two prompts unless they have different addresses on
+/// one provider.
+fn join(parent: &mut [usize], addresses: &mut [HashMap<&str, &str>], a: usize, b: usize) {
+    let (mut a, mut b) = (find(parent, a), find(parent, b));
+    if a == b {
+        return;
+    }
+    if addresses[a].len() < addresses[b].len() {
+        std::mem::swap(&mut a, &mut b);
+    }
+    let conflict = addresses[b]
+        .iter()
+        .any(|(website, url)| addresses[a].get(website).is_some_and(|other| other != url));
+    if conflict {
+        return;
+    }
+    let moved = std::mem::take(&mut addresses[b]);
+    addresses[a].extend(moved);
+    parent[b] = a;
+}
+
+/// The latest title captured on each chat's conversations. A title that more
+/// than one chat carries on a provider, such as the provider's own name, says
+/// nothing about the chat and is passed over.
+fn chat_titles(chats: &[Vec<usize>], conversations: &[Vec<SearchConversation>]) -> Vec<String> {
+    let mut owners = HashMap::new();
+    let mut generic = HashSet::new();
+    for (index, chat) in chats.iter().enumerate() {
+        for conversation in chat.iter().flat_map(|&position| &conversations[position]) {
+            if conversation.title.is_empty() {
+                continue;
+            }
+            let key = (
+                conversation.website_id.as_str(),
+                conversation.title.as_str(),
+            );
+            if *owners.entry(key).or_insert(index) != index {
+                generic.insert(key);
+            }
+        }
+    }
+    chats
+        .iter()
+        .map(|chat| {
+            chat.iter()
+                .rev()
+                .flat_map(|&position| &conversations[position])
+                .find(|conversation| {
+                    !conversation.title.is_empty()
+                        && !generic.contains(&(
+                            conversation.website_id.as_str(),
+                            conversation.title.as_str(),
+                        ))
+                })
+                .map(|conversation| conversation.title.clone())
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+/// The latest conversation on each provider in a chat, passing over one that
+/// never got an address for an earlier one that did.
+fn latest_conversations(
+    chat: &[usize],
+    conversations: &[Vec<SearchConversation>],
+) -> Vec<SearchConversation> {
+    let mut latest: Vec<SearchConversation> = Vec::new();
+    for conversation in chat
+        .iter()
+        .rev()
+        .flat_map(|&position| &conversations[position])
+    {
+        match latest
+            .iter_mut()
+            .find(|item| item.website_id == conversation.website_id)
+        {
+            Some(item) if item.url.is_empty() && !conversation.url.is_empty() => {
+                *item = conversation.clone();
+            }
+            Some(_) => {}
+            None => latest.push(conversation.clone()),
+        }
+    }
+    latest
 }
 
 /// Reads grouped prompts plus any rows still in the per-provider table.
@@ -730,6 +978,98 @@ mod tests {
         assert_eq!(prompts(&store.search("  ").unwrap()), ["second", "first"]);
     }
 
+    #[test]
+    fn lists_follow_up_prompts_as_one_chat_by_its_first_prompt_and_title() {
+        let store = memory_store();
+        let first = save(
+            &store,
+            "How do I cache turbo?",
+            &[
+                ("claude", "Claude", "https://claude.ai/chat/1"),
+                ("chatgpt", "ChatGPT", "https://chatgpt.com/c/9"),
+            ],
+        );
+        save(
+            &store,
+            "Something else",
+            &[("claude", "Claude", "https://claude.ai/chat/2")],
+        );
+        save(
+            &store,
+            "And in GitHub Actions?",
+            &[
+                (
+                    "claude",
+                    "Turbo caching - Claude",
+                    "https://claude.ai/chat/1",
+                ),
+                ("chatgpt", "Turbo cache", "https://chatgpt.com/c/9"),
+            ],
+        );
+
+        let recent = store.search("").unwrap();
+        assert_eq!(
+            prompts(&recent),
+            ["How do I cache turbo?", "Something else"]
+        );
+        assert_eq!(recent[0].id, first);
+        assert_eq!(recent[0].title, "Turbo caching - Claude");
+        let urls = recent[0]
+            .conversations
+            .iter()
+            .map(|conversation| conversation.url.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            urls,
+            ["https://claude.ai/chat/1", "https://chatgpt.com/c/9"]
+        );
+        // "Claude" names more than one chat, so it is no chat's title.
+        assert_eq!(recent[1].title, "");
+
+        let found = store.search("github").unwrap();
+        assert_eq!(prompts(&found), ["How do I cache turbo?"]);
+        assert_eq!(
+            found[0].matched_prompt.as_deref(),
+            Some("And in GitHub Actions?")
+        );
+        assert_eq!(store.search("cache").unwrap()[0].matched_prompt, None);
+        assert_eq!(store.search("turbo github").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn keeps_chats_apart_that_share_an_address_on_only_one_provider() {
+        let store = memory_store();
+        save(
+            &store,
+            "first chat",
+            &[
+                ("grok", "", "https://x.com/i/grok"),
+                ("claude", "", "https://claude.ai/chat/1"),
+            ],
+        );
+        save(
+            &store,
+            "second chat",
+            &[
+                ("grok", "", "https://x.com/i/grok"),
+                ("claude", "", "https://claude.ai/chat/2"),
+            ],
+        );
+        save(
+            &store,
+            "second chat, continued",
+            &[
+                ("grok", "", "https://x.com/i/grok"),
+                ("claude", "", "https://claude.ai/chat/2"),
+            ],
+        );
+
+        assert_eq!(
+            prompts(&store.search("").unwrap()),
+            ["second chat", "first chat"]
+        );
+    }
+
     fn create_legacy_table(connection: &Connection) {
         connection
             .execute_batch(
@@ -764,7 +1104,7 @@ mod tests {
 
         let results = store.search("same").unwrap();
         assert_eq!(results.len(), 2);
-        assert_eq!(results[0].created_at, "2026-09-25 11:00:00");
+        assert_eq!(results[0].updated_at, "2026-09-25 11:00:00");
         assert_eq!(results[1].conversations.len(), 2);
         assert_eq!(results[1].conversations[1].url, "https://chatgpt.com/c/1");
         assert_eq!(store.search("other").unwrap().len(), 1);

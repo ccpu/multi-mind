@@ -3,6 +3,7 @@ import type { SearchConversation, SearchEntry } from '@internal/tauri-api';
 import { cn } from '@pixpilot/shadcn';
 import { Fragment } from 'react';
 import {
+  chatTitle,
   formatAge,
   highlightParts,
   openableConversations,
@@ -30,10 +31,28 @@ function describe(conversation: SearchConversation, website: WebsiteInfo | undef
   return conversation.title || conversation.url;
 }
 
+function Highlighted({ text, terms }: { text: string; terms: readonly string[] }) {
+  return (
+    <>
+      {highlightParts(text, terms).map((part, index) =>
+        part.match ? (
+          // eslint-disable-next-line react/no-array-index-key -- parts have no other identity
+          <mark key={index} className="bg-transparent font-semibold text-foreground">
+            {part.text}
+          </mark>
+        ) : (
+          // eslint-disable-next-line react/no-array-index-key -- parts have no other identity
+          <Fragment key={index}>{part.text}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
 /**
- * One saved prompt, with the providers it was sent to listed after it. The
- * prompt opens every conversation it started; a provider name opens just that
- * one.
+ * One saved chat: its captured title, then its first prompt and any later one
+ * that matches better, with its providers listed after them. The chat opens
+ * every conversation in it; a provider name opens just that one.
  */
 export function SearchResultItem({
   id,
@@ -45,7 +64,8 @@ export function SearchResultItem({
   onOpen,
 }: SearchResultItemProps) {
   const openable = openableConversations(entry, websites);
-  const age = formatAge(entry.createdAt);
+  const title = chatTitle(entry, websites);
+  const age = formatAge(entry.updatedAt);
 
   return (
     <div
@@ -59,19 +79,25 @@ export function SearchResultItem({
         onClick={() => onOpen(openable)}
         className="block w-full text-left disabled:opacity-50"
       >
-        <span className="line-clamp-2 text-sm wrap-break-word">
-          {highlightParts(promptSnippet(entry.prompt, terms), terms).map((part, index) =>
-            part.match ? (
-              // eslint-disable-next-line react/no-array-index-key -- parts have no other identity
-              <mark key={index} className="bg-transparent font-semibold text-foreground">
-                {part.text}
-              </mark>
-            ) : (
-              // eslint-disable-next-line react/no-array-index-key -- parts have no other identity
-              <Fragment key={index}>{part.text}</Fragment>
-            ),
+        {title !== '' && (
+          <span className="block truncate text-sm font-medium">
+            <Highlighted text={title} terms={terms} />
+          </span>
+        )}
+        <span
+          className={cn(
+            'line-clamp-2 wrap-break-word',
+            title === '' ? 'text-sm' : 'text-xs text-muted-foreground',
           )}
+        >
+          <Highlighted text={promptSnippet(entry.prompt, terms)} terms={terms} />
         </span>
+        {entry.matchedPrompt !== undefined && (
+          <span className="mt-0.5 line-clamp-1 text-xs wrap-break-word text-muted-foreground">
+            {'↳ '}
+            <Highlighted text={promptSnippet(entry.matchedPrompt, terms)} terms={terms} />
+          </span>
+        )}
       </button>
       <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
         <span className="min-w-0 truncate">
