@@ -55,7 +55,17 @@ export function useAppSettings(): UseAppSettingsResult {
       .getSettings()
       .then((stored) => {
         if (!cancelled) {
-          setSettings(stored);
+          // Every new main window starts a new chat, including app launches.
+          const next = untickChatPrompts(stored);
+          setSettings(next);
+
+          if (next.activePrompts.length !== stored.activePrompts.length) {
+            appApi.invoke
+              .saveSettings({ activePrompts: next.activePrompts })
+              .catch((error: unknown) => {
+                console.error('Failed to untick chat presets on startup:', error);
+              });
+          }
         }
       })
       .catch((error: unknown) => {

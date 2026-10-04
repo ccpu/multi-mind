@@ -474,6 +474,55 @@ describe('main window', () => {
     expect(screen.getByRole('checkbox', { name: 'Use Terse' })).toBeChecked();
   });
 
+  it('unticks chat-only presets on startup and again in a new window', async () => {
+    const user = userEvent.setup();
+    const stored = stub({
+      promptEditor: 'plain',
+      prompts: [
+        {
+          id: 'chat',
+          name: 'Chat only',
+          value: 'For this chat.',
+          location: 'end',
+          sendOnce: true,
+          untickOnNewChat: true,
+          overrideOthers: true,
+        },
+        {
+          id: 'kept',
+          name: 'Kept',
+          value: 'Keep using this.',
+          location: 'end',
+          sendOnce: true,
+          untickOnNewChat: false,
+          overrideOthers: false,
+        },
+      ],
+      activePrompts: ['chat', 'kept'],
+    });
+    settingsGet.mockResolvedValue(stored);
+    const firstWindow = render(<App />);
+
+    expect(
+      await screen.findByRole('checkbox', { name: 'Use Chat only' }),
+    ).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Use Kept' })).toBeChecked();
+    expect(settingsSave).toHaveBeenCalledExactlyOnceWith({ activePrompts: ['kept'] });
+
+    await user.click(screen.getByRole('checkbox', { name: 'Use Chat only' }));
+    expect(screen.getByRole('checkbox', { name: 'Use Chat only' })).toBeChecked();
+    firstWindow.unmount();
+    settingsSave.mockClear();
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('checkbox', { name: 'Use Chat only' }),
+    ).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Use Kept' })).toBeChecked();
+    expect(settingsSave).toHaveBeenCalledExactlyOnceWith({ activePrompts: ['kept'] });
+  });
+
   it('unticks the presets that last for one chat on New Chat', async () => {
     const user = userEvent.setup();
     const preset = {
@@ -488,18 +537,22 @@ describe('main window', () => {
         promptEditor: 'plain',
         activeWebsites: ['claude'],
         prompts: [
-          { ...preset, id: 'chat', untickOnNewChat: true },
-          { ...preset, id: 'kept', untickOnNewChat: false },
+          { ...preset, id: 'chat', name: 'Chat only', untickOnNewChat: true },
+          { ...preset, id: 'kept', name: 'Kept', untickOnNewChat: false },
         ],
-        activePrompts: ['chat', 'kept'],
+        activePrompts: ['kept'],
       }),
     );
     render(<App />);
     await waitForPanes();
 
+    expect(settingsSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('checkbox', { name: 'Use Chat only' }));
+    expect(settingsSave).toHaveBeenCalledWith({ activePrompts: ['kept', 'chat'] });
+    settingsSave.mockClear();
     await user.click(screen.getByRole('button', { name: 'New Chat' }));
 
-    expect(settingsSave).toHaveBeenCalledWith({ activePrompts: ['kept'] });
+    expect(settingsSave).toHaveBeenCalledExactlyOnceWith({ activePrompts: ['kept'] });
   });
 
   it('saves a prompt once with a conversation per provider and updates its address', async () => {

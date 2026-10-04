@@ -194,7 +194,7 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
       <PresetSwitch
         id={`${preset.id}-untick-on-new-chat`}
         label="Untick on New Chat"
-        description="Stays ticked for this chat only. New Chat unticks it; tick it again to use it in the next chat."
+        description="Stays ticked for this chat only. New Chat, a new window, or launching the app unticks it; tick it again to use it in the next chat."
         checked={draft.untickOnNewChat}
         onCheckedChange={handleChangeUntickOnNewChat}
       />
