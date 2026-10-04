@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/ccpu/multi-mind/compare/v1.13.0...v1.14.0) (2026-10-03)
+
+
+### Features
+
+* **search:** update terminology and structure for chat handling ([05060c2](https://github.com/ccpu/multi-mind/commit/05060c29a6edac3a02224dca9de705da6ef3aee2))
+
 # [1.13.0](https://github.com/ccpu/multi-mind/compare/v1.12.0...v1.13.0) (2026-10-01)
 
 
