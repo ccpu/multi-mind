@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/ccpu/multi-mind/compare/v1.14.0...v1.15.0) (2026-10-04)
+
+
+### Features
+
+* **PresetSwitch:** enhance description for clarity ([daea2e7](https://github.com/ccpu/multi-mind/commit/daea2e7501b2f4494c7e5a9d219afe12856ab7c2))
+
 # [1.14.0](https://github.com/ccpu/multi-mind/compare/v1.13.0...v1.14.0) (2026-10-03)
 
 
