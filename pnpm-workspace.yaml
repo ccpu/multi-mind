@@ -9,29 +9,29 @@ packages:
 catalogs:
   dev:
     '@pixpilot/dev-config': ^3.22.1
-    '@pixpilot/vite-plugin-source-inspector': ^0.3.0
+    '@pixpilot/vite-plugin-source-inspector': ^0.3.1
     '@tailwindcss/vite': ^4.3.3
     '@tauri-apps/cli': ^2.11.5
     '@testing-library/jest-dom': ^7.0.1
     '@testing-library/react': ^16.3.3
     '@testing-library/user-event': ^14.6.7
-    '@types/node': ^26.6.2
+    '@types/node': ^26.6.4
     '@types/react': ^19.3.0
     '@types/react-dom': ^19.3.0
     '@vitejs/plugin-react': ^6.1.1
-    '@vitest/coverage-v8': ^5.0.1
-    '@vitest/ui': ^5.0.1
+    '@vitest/coverage-v8': ^5.0.3
+    '@vitest/ui': ^5.0.3
     eslint: ^10.11.0
     glob: ^13.0.6
-    jsdom: ^30.1.0
-    prettier: ^3.9.8
+    jsdom: ^30.1.1
+    prettier: ^3.9.9
     prettier-plugin-tailwindcss: ^0.8.1
     tsdown: ^0.23.0
     tw-animate-css: ^1.4.0
     typescript: ^6.0.3
     unrun: ^0.3.1
-    vite: ^8.3.0
-    vitest: ^5.0.1
+    vite: ^8.3.2
+    vitest: ^5.0.3
   prod:
     '@dnd-kit/core': ^6.3.1
     '@dnd-kit/modifiers': ^9.0.0
