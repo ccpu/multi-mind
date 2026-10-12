@@ -7,7 +7,14 @@ import {
   DropdownMenuTrigger,
 } from '@pixpilot/shadcn';
 import { Button, ToggleButton } from '@pixpilot/shadcn-ui';
-import { Columns3, Copy, EllipsisVertical, MessageCircle, Settings } from 'lucide-react';
+import {
+  Columns3,
+  Copy,
+  EllipsisVertical,
+  Library,
+  MessageCircle,
+  Settings,
+} from 'lucide-react';
 import { SearchHistory } from './search/SearchHistory';
 
 interface MenuBarProps {
@@ -21,6 +28,8 @@ interface MenuBarProps {
   onResetLayout: () => void;
   onToggleWebsite: (websiteId: string) => void;
   onOpenSettings: () => void;
+  /** Opens the full list of prompt presets. */
+  onOpenPrompts: () => void;
   /** Opens another copy of this window, signed in to the same sites. */
   onNewWindow: () => void;
   /** Reopens saved conversations picked in the search box. */
@@ -41,6 +50,7 @@ export function MenuBar({
   onResetLayout,
   onToggleWebsite,
   onOpenSettings,
+  onOpenPrompts,
   onNewWindow,
   onOpenConversations,
 }: MenuBarProps) {
@@ -58,6 +68,10 @@ export function MenuBar({
             <DropdownMenuItem onSelect={onOpenSettings}>
               <Settings />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpenPrompts}>
+              <Library />
+              Prompts
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

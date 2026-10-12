@@ -35,9 +35,13 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
     presets: [],
     activePrompts: [],
     usedPrompts: [],
+    presetsDialogOpen: false,
+    onPresetsDialogOpenChange: vi.fn(),
     onChange: vi.fn(),
     onActivate: vi.fn(),
     onSubmit: vi.fn(),
+    websites: [],
+    onSubmitTo: vi.fn(),
     onPreviousPrompt: vi.fn(),
     onNextPrompt: vi.fn(),
     onDismiss: vi.fn(),
@@ -192,10 +196,43 @@ describe('promptPanel', () => {
       preset({ id: 'terse', name: 'Terse', value: 'Be terse.', location: 'start' }),
     ];
 
-    it('shows nothing above the prompt box while the library is empty', () => {
+    it('shows only the new prompt button above the prompt box while the library is empty', () => {
       renderPanel();
 
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'New prompt' })).toBeInTheDocument();
+    });
+
+    it('adds a blank preset from the row and opens its editor beside it', async () => {
+      const user = userEvent.setup();
+      const { props, rerender } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'New prompt' }));
+
+      expect(props.onAddPreset).toHaveBeenCalledWith(
+        expect.objectContaining({ name: '', value: '', location: 'end' }),
+      );
+      const created = vi.mocked(props.onAddPreset).mock.calls[0]![0];
+      rerender(
+        <OverlayProvider>
+          <PromptPanel {...props} presets={[...presets, created]} />
+        </OverlayProvider>,
+      );
+
+      await user.type(await screen.findByLabelText('Name'), 'French');
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+      expect(props.onChangePreset).toHaveBeenCalledWith(
+        created.id,
+        expect.objectContaining({ name: 'French' }),
+      );
+    });
+
+    it('has no prompts button beside the prompt box', () => {
+      renderPanel({ presets });
+
+      expect(screen.queryByRole('button', { name: 'Prompts' })).not.toBeInTheDocument();
     });
 
     it('gives every preset a badge, ticked when it is in use', () => {
@@ -426,11 +463,8 @@ describe('promptPanel', () => {
       );
     });
 
-    it('lists the library in the manager', async () => {
-      const user = userEvent.setup();
-      renderPanel({ presets });
-
-      await user.click(screen.getByRole('button', { name: 'Prompts' }));
+    it('lists the library in the manager', () => {
+      renderPanel({ presets, presetsDialogOpen: true });
 
       const manager = screen.getByRole('dialog');
       expect(within(manager).getByText('Terse')).toBeInTheDocument();
@@ -439,10 +473,11 @@ describe('promptPanel', () => {
 
     it('adds a blank preset from the manager', async () => {
       const user = userEvent.setup();
-      const { props } = renderPanel({ presets });
+      const { props } = renderPanel({ presets, presetsDialogOpen: true });
 
-      await user.click(screen.getByRole('button', { name: 'Prompts' }));
-      await user.click(screen.getByRole('button', { name: 'New prompt' }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'New prompt' }),
+      );
 
       expect(props.onAddPreset).toHaveBeenCalledWith(
         expect.objectContaining({ name: '', value: '', location: 'end' }),
@@ -451,9 +486,8 @@ describe('promptPanel', () => {
 
     it('saves an edit when the manager row collapses', async () => {
       const user = userEvent.setup();
-      const { props } = renderPanel({ presets });
+      const { props } = renderPanel({ presets, presetsDialogOpen: true });
 
-      await user.click(screen.getByRole('button', { name: 'Prompts' }));
       const manager = screen.getByRole('dialog');
       await user.click(within(manager).getByRole('button', { name: /English/u }));
       await user.type(within(manager).getByLabelText('Name'), '!');
@@ -467,9 +501,8 @@ describe('promptPanel', () => {
 
     it('keeps a preset when permanent deletion is cancelled', async () => {
       const user = userEvent.setup();
-      const { props } = renderPanel({ presets });
+      const { props } = renderPanel({ presets, presetsDialogOpen: true });
 
-      await user.click(screen.getByRole('button', { name: 'Prompts' }));
       const manager = screen.getByRole('dialog');
       await user.click(within(manager).getByRole('button', { name: /English/u }));
       await user.click(within(manager).getByRole('button', { name: 'Delete' }));
@@ -486,9 +519,8 @@ describe('promptPanel', () => {
 
     it('drops a preset from the manager after confirmation', async () => {
       const user = userEvent.setup();
-      const { props } = renderPanel({ presets });
+      const { props } = renderPanel({ presets, presetsDialogOpen: true });
 
-      await user.click(screen.getByRole('button', { name: 'Prompts' }));
       const manager = screen.getByRole('dialog');
       await user.click(within(manager).getByRole('button', { name: /English/u }));
       await user.click(within(manager).getByRole('button', { name: 'Delete' }));

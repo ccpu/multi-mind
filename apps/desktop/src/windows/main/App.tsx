@@ -63,6 +63,7 @@ function App() {
   const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
   const [guestConfig, setGuestConfig] = useState<GuestConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
   const [promptErrors, setPromptErrors] = useState<Record<string, GuestPromptError>>({});
 
   const promptRef = useRef<PromptEditorHandle | null>(null);
@@ -207,53 +208,69 @@ function App() {
    * the chat. A ticked overriding preset leaves the other ticked ones out
    * altogether.
    */
-  const runPrompt = useCallback(() => {
-    const typedPrompt = promptTextRef.current;
-    const guestGlobals = guestConfigRef.current;
-    const presets = promptsToSend(unusedPresets(getActivePrompts(settingsRef.current)));
-    const composed = composePrompt(typedPrompt, presets);
+  const sendPrompt = useCallback(
+    (onlyWebsiteId?: string) => {
+      const typedPrompt = promptTextRef.current;
+      const guestGlobals = guestConfigRef.current;
+      const presets = promptsToSend(unusedPresets(getActivePrompts(settingsRef.current)));
+      const composed = composePrompt(typedPrompt, presets);
 
-    if (composed === '' || guestGlobals === null) {
-      return;
-    }
+      if (composed === '' || guestGlobals === null) {
+        return;
+      }
 
-    markPresetsSent(presets);
+      markPresetsSent(presets);
 
-    const websites = getActiveWebsites(settingsRef.current);
-    const savePrompt = recordPrompt(
-      composed,
-      websites.map((website) => website.id),
-    );
-    websites.forEach((website) => {
-      const attemptId = createId('prompt-attempt');
-      attemptsRef.current.set(website.id, attemptId);
-      dismissPromptError(website.id);
-      appApi.guest
-        .run(
-          website.id,
-          createRunPromptScript(website, composed, guestGlobals, attemptId),
-        )
-        .then(
-          () => {
-            savePrompt(website.id).catch((error: unknown) => {
-              console.error(`Failed to save prompt history for ${website.name}:`, error);
-            });
-          },
-          (error: unknown) => {
-            console.error(`Failed to run the prompt on ${website.name}:`, error);
-          },
-        );
-    });
+      const websites = getActiveWebsites(settingsRef.current).filter(
+        (website) => onlyWebsiteId === undefined || website.id === onlyWebsiteId,
+      );
+      const savePrompt = recordPrompt(
+        composed,
+        websites.map((website) => website.id),
+      );
+      websites.forEach((website) => {
+        const attemptId = createId('prompt-attempt');
+        attemptsRef.current.set(website.id, attemptId);
+        dismissPromptError(website.id);
+        appApi.guest
+          .run(
+            website.id,
+            createRunPromptScript(website, composed, guestGlobals, attemptId),
+          )
+          .then(
+            () => {
+              savePrompt(website.id).catch((error: unknown) => {
+                console.error(
+                  `Failed to save prompt history for ${website.name}:`,
+                  error,
+                );
+              });
+            },
+            (error: unknown) => {
+              console.error(`Failed to run the prompt on ${website.name}:`, error);
+            },
+          );
+      });
 
-    // Only what was typed is worth stepping back to; the presets re-apply
-    // themselves, and an empty entry would just be a dead stop in the history.
-    if (typedPrompt !== '') {
-      historyRef.current.saveState(typedPrompt);
-    }
+      // Only what was typed is worth stepping back to; the presets re-apply
+      // themselves, and an empty entry would just be a dead stop in the history.
+      if (typedPrompt !== '') {
+        historyRef.current.saveState(typedPrompt);
+      }
 
-    setPrompt('');
-    setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, [dismissPromptError, markPresetsSent, recordPrompt, unusedPresets]);
+      setPrompt('');
+      setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
+    },
+    [dismissPromptError, markPresetsSent, recordPrompt, unusedPresets],
+  );
+
+  const runPrompt = useCallback(() => sendPrompt(), [sendPrompt]);
+
+  /** The same, to one of the open browsers only. */
+  const runPromptOn = useCallback(
+    (websiteId: string) => sendPrompt(websiteId),
+    [sendPrompt],
+  );
 
   /** Reopens saved conversations, enabling and opening their providers first. */
   const openConversations = useCallback(
@@ -328,6 +345,7 @@ function App() {
   }, []);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openPrompts = useCallback(() => setPromptsOpen(true), []);
 
   /** Typing in or clicking the prompt box takes it back to its full size. */
   const expandPrompt = useCallback(() => {
@@ -344,6 +362,7 @@ function App() {
         onResetLayout={resetLayout}
         onToggleWebsite={toggleWebsite}
         onOpenSettings={openSettings}
+        onOpenPrompts={openPrompts}
         onNewWindow={openNewWindow}
         onOpenConversations={openConversations}
       />
@@ -374,9 +393,13 @@ function App() {
         presets={settings.prompts}
         activePrompts={settings.activePrompts}
         usedPrompts={usedPrompts}
+        presetsDialogOpen={promptsOpen}
+        onPresetsDialogOpenChange={setPromptsOpen}
         onChange={handlePromptChange}
         onActivate={expandPrompt}
         onSubmit={runPrompt}
+        websites={activeWebsites}
+        onSubmitTo={runPromptOn}
         onPreviousPrompt={goLastPrompt}
         onNextPrompt={goNextPrompt}
         onDismiss={collapsePrompt}

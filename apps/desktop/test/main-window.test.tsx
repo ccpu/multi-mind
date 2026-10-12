@@ -1,7 +1,7 @@
 import type { AppSettings, GuestMessageEvent } from '@internal/multi-mind';
 import type { GuestPane, SearchEntry } from '@internal/tauri-api';
 import { DEFAULT_SETTINGS, DEFAULT_WEBSITES } from '@internal/multi-mind';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/windows/main/App';
@@ -144,6 +144,17 @@ describe('main window', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Settings' }));
 
     expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('opens the prompt list from the overflow menu', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    screen.getByRole('button', { name: 'More options' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('menuitem', { name: 'Prompts' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Prompts' })).toBeInTheDocument();
   });
 
   /*
@@ -297,6 +308,30 @@ describe('main window', () => {
       screen.getByRole('button', { name: 'Dismiss chatgpt prompt error' }),
     );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('sends the prompt to the one browser picked under Conversation', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ promptEditor: 'plain', activeWebsites: ['chatgpt', 'claude'] }),
+    );
+    render(<App />);
+    await waitForPanes();
+
+    await user.type(
+      await screen.findByPlaceholderText(/Ask every enabled model/u),
+      'hello',
+    );
+    await user.click(screen.getByRole('button', { name: 'Conversation' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: /claude/iu }),
+    );
+
+    await waitFor(() => {
+      expect(guestRun).toHaveBeenCalledTimes(1);
+    });
+    expect(guestRun.mock.calls[0]?.[0]).toBe('claude');
+    expect(guestRun.mock.calls[0]?.[1]).toContain('hello');
   });
 
   /*
@@ -745,12 +780,12 @@ describe('main window', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Prompts' }));
     await user.click(screen.getByRole('button', { name: 'New prompt' }));
 
     expect(settingsSave).toHaveBeenCalledWith({
       prompts: [expect.objectContaining({ name: '', value: '', location: 'end' })],
     });
+    expect(await screen.findByLabelText('Name')).toBeInTheDocument();
   });
 
   it('ticks a preset the settings file already holds', async () => {

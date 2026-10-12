@@ -2,19 +2,21 @@ import type {
   PromptEditorKind,
   PromptPreset,
   PromptPresetDraft,
+  WebsiteInfo,
 } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../types/prompt-editor';
 import { overridingPrompts, unusedPrompts } from '@internal/multi-mind';
 import { Button } from '@pixpilot/shadcn-ui';
-import { Library, SendHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SendHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThirdClickHandler } from '../hooks/useThirdClickHandler';
 import { MarkdownPromptEditor } from './MarkdownPromptEditor';
 import { PlainPromptEditor } from './PlainPromptEditor';
 import { promptSurface } from './prompt-surface';
 import { PromptPresetBar } from './PromptPresetBar';
 import { PromptPresetsDialog } from './PromptPresetsDialog';
+import { SendToOneButton } from './SendToOneButton';
 
 const PLACEHOLDER = 'Ask every enabled model at once…  (ctrl+enter to send)';
 
@@ -31,9 +33,16 @@ interface PromptPanelProps {
   activePrompts: readonly string[];
   /** Ids of the use-once presets already sent in this chat. */
   usedPrompts: readonly string[];
+  /** Whether the full list of presets is open; it is opened from the menu. */
+  presetsDialogOpen: boolean;
+  onPresetsDialogOpenChange: (open: boolean) => void;
   onChange: (value: string) => void;
   onActivate: () => void;
   onSubmit: () => void;
+  /** The open browsers, any one of which a prompt can be sent to on its own. */
+  websites: readonly WebsiteInfo[];
+  /** Sends the prompt to the one browser picked, and no other. */
+  onSubmitTo: (websiteId: string) => void;
   onPreviousPrompt: () => void;
   onNextPrompt: () => void;
   onDismiss: () => void;
@@ -60,9 +69,13 @@ export function PromptPanel({
   presets,
   activePrompts,
   usedPrompts,
+  presetsDialogOpen,
+  onPresetsDialogOpenChange,
   onChange,
   onActivate,
   onSubmit,
+  websites,
+  onSubmitTo,
   onPreviousPrompt,
   onNextPrompt,
   onDismiss,
@@ -74,8 +87,6 @@ export function PromptPanel({
   onRemovePreset,
 }: PromptPanelProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [managerOpen, setManagerOpen] = useState(false);
-  const openManager = useCallback(() => setManagerOpen(true), []);
   const selectAll = useCallback(() => editorRef.current?.selectAll(), [editorRef]);
   const handleThirdClick = useThirdClickHandler(selectAll);
   // A used preset is not going out, so it cannot leave the others out either.
@@ -132,6 +143,7 @@ export function PromptPanel({
           onToggle={onTogglePreset}
           onReuse={onReusePreset}
           onMove={onMovePreset}
+          onAdd={onAddPreset}
           onChange={onChangePreset}
           onRemove={onRemovePreset}
         />
@@ -150,15 +162,12 @@ export function PromptPanel({
           <SendHorizontal />
           Submit
         </Button>
-        <Button variant="outline" className="w-full" onClick={openManager}>
-          <Library />
-          Prompts
-        </Button>
+        <SendToOneButton websites={websites} onSubmitTo={onSubmitTo} />
       </div>
 
       <PromptPresetsDialog
-        open={managerOpen}
-        onOpenChange={setManagerOpen}
+        open={presetsDialogOpen}
+        onOpenChange={onPresetsDialogOpenChange}
         presets={presets}
         activePrompts={activePrompts}
         usedPrompts={usedPrompts}

@@ -6,9 +6,10 @@ export interface UseOverflowCountResult {
   containerRef: RefObject<HTMLDivElement | null>;
   /**
    * A copy of the same row, hidden and never clipped, holding one child per
-   * item plus a last child standing in for the overflow button. Widths are
-   * read from it, because reading them from the visible row would mean
-   * measuring a row that has already had items taken out of it.
+   * item, then one standing in for the overflow button, then one per control
+   * that always shows after them (`fixedCount`). Widths are read from it,
+   * because reading them from the visible row would mean measuring a row that
+   * has already had items taken out of it.
    */
   ghostRef: RefObject<HTMLDivElement | null>;
   /** How many items fit; the rest belong behind the overflow button. */
@@ -42,7 +43,10 @@ function countThatFit(widths: number[], budget: number, gap: number): number {
  * changes the layout that decided to hide it, which is how such a row ends up
  * flickering between two answers.
  */
-export function useOverflowCount(itemCount: number): UseOverflowCountResult {
+export function useOverflowCount(
+  itemCount: number,
+  fixedCount = 0,
+): UseOverflowCountResult {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(itemCount);
@@ -56,15 +60,19 @@ export function useOverflowCount(itemCount: number): UseOverflowCountResult {
     }
 
     const children = [...ghost.children];
-    // The ghost is one child longer than the row: the overflow button.
-    if (children.length !== itemCount + 1) {
+    // After the items: the overflow button, then the controls that always show.
+    if (children.length !== itemCount + 1 + fixedCount) {
       return;
     }
 
-    const widths = children.map((child) => child.getBoundingClientRect().width);
-    const overflowWidth = widths.pop() ?? 0;
+    const allWidths = children.map((child) => child.getBoundingClientRect().width);
+    const widths = allWidths.slice(0, itemCount);
+    const overflowWidth = allWidths[itemCount] ?? 0;
     const gap = Number.parseFloat(getComputedStyle(ghost).columnGap) || 0;
-    const available = container.clientWidth;
+    const fixedWidth = allWidths
+      .slice(itemCount + 1)
+      .reduce((total, width) => total + gap + width, 0);
+    const available = container.clientWidth - fixedWidth;
 
     const fits = countThatFit(widths, available, gap);
 
@@ -73,7 +81,7 @@ export function useOverflowCount(itemCount: number): UseOverflowCountResult {
         ? fits
         : countThatFit(widths, available - overflowWidth - gap, gap),
     );
-  }, [itemCount]);
+  }, [fixedCount, itemCount]);
 
   // Labels change width as they are edited, and items come and go, so the row
   // is remeasured after every render rather than on a dependency list that

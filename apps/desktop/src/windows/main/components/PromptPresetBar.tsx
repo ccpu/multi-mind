@@ -19,9 +19,10 @@ import {
 } from '@dnd-kit/sortable';
 import { isPromptUsed, promptOverriddenBy } from '@internal/multi-mind';
 import { Popover, PopoverContent, PopoverTrigger } from '@pixpilot/shadcn-ui';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Plus } from 'lucide-react';
 import { useCallback } from 'react';
 import { useOverflowCount } from '../hooks/useOverflowCount';
+import { NewPromptPresetButton } from './NewPromptPresetButton';
 import { promptSurface } from './prompt-surface';
 import { PromptPresetBadge, PromptPresetBadgeGhost } from './PromptPresetBadge';
 
@@ -36,11 +37,12 @@ interface PromptPresetBarProps {
   onReuse: (promptId: string) => void;
   /** Moves the dragged preset to where the one it was dropped on is. */
   onMove: (activeId: string, overId: string) => void;
+  onAdd: (preset: PromptPreset) => void;
   onChange: (promptId: string, draft: PromptPresetDraft) => void;
   onRemove: (promptId: string) => void;
 }
 
-const OVERFLOW_BUTTON_CLASS =
+const ROW_BUTTON_CLASS =
   'text-muted-foreground hover:text-foreground flex h-6 shrink-0 items-center rounded-md border px-1.5';
 
 /**
@@ -58,7 +60,7 @@ const OVERFLOW_MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
  * a scrollbar. The badges keep the library's order whatever is ticked, and are
  * dragged to change it, in the row and in the popover alike. While a ticked
  * preset overrides the rest, every other badge is greyed out and says so on
- * hover.
+ * hover. A `+` after the last badge adds a preset and opens its editor.
  */
 export function PromptPresetBar({
   presets,
@@ -68,10 +70,12 @@ export function PromptPresetBar({
   onToggle,
   onReuse,
   onMove,
+  onAdd,
   onChange,
   onRemove,
 }: PromptPresetBarProps) {
-  const { containerRef, ghostRef, visibleCount } = useOverflowCount(presets.length);
+  // The one control that always shows after the badges: the `+`.
+  const { containerRef, ghostRef, visibleCount } = useOverflowCount(presets.length, 1);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }),
@@ -88,10 +92,6 @@ export function PromptPresetBar({
 
   const visible = presets.slice(0, visibleCount);
   const hidden = presets.slice(visibleCount);
-
-  if (presets.length === 0) {
-    return null;
-  }
 
   const isUsed = (preset: PromptPreset) =>
     activePrompts.includes(preset.id) && isPromptUsed(preset, usedPrompts);
@@ -132,7 +132,7 @@ export function PromptPresetBar({
       {hidden.length > 0 && (
         <Popover>
           <PopoverTrigger
-            className={OVERFLOW_BUTTON_CLASS}
+            className={ROW_BUTTON_CLASS}
             aria-label={`Show ${String(hidden.length)} more prompts`}
           >
             <MoreHorizontal className="size-4" />
@@ -163,6 +163,14 @@ export function PromptPresetBar({
         </Popover>
       )}
 
+      <NewPromptPresetButton
+        className={ROW_BUTTON_CLASS}
+        presets={presets}
+        onAdd={onAdd}
+        onChange={onChange}
+        onRemove={onRemove}
+      />
+
       {/*
         The row as it would be if nothing were clipped, which is what says how
         much of it fits. `invisible` rather than `hidden`, because a box with no
@@ -181,8 +189,11 @@ export function PromptPresetBar({
             used={isUsed(preset)}
           />
         ))}
-        <span className={OVERFLOW_BUTTON_CLASS}>
+        <span className={ROW_BUTTON_CLASS}>
           <MoreHorizontal className="size-4" />
+        </span>
+        <span className={ROW_BUTTON_CLASS}>
+          <Plus className="size-4" />
         </span>
       </div>
     </div>

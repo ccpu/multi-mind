@@ -36,9 +36,9 @@ interface PromptPresetsDialogProps {
 }
 
 /**
- * The library behind the prompt box. Everything here is also on the badge row;
- * this is where a preset is added, and where there is room to read the whole
- * list at once.
+ * The library behind the prompt box, opened from the menu. Everything here is
+ * also on the badge row; this is where there is room to read the whole list at
+ * once.
  */
 export function PromptPresetsDialog({
   open,
