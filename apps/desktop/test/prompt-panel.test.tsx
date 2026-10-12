@@ -2,7 +2,7 @@ import type { PromptPreset } from '@internal/multi-mind';
 import type { RefObject } from 'react';
 import type { PromptEditorHandle } from '../src/windows/main/types/prompt-editor';
 import { OverlayProvider } from '@internal/ui';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PromptPanel } from '../src/windows/main/components/PromptPanel';
@@ -254,24 +254,34 @@ describe('promptPanel', () => {
     });
 
     it('moves a preset by dragging the badge itself, without opening its editor', async () => {
-      const user = userEvent.setup();
-      const { props } = renderPanel({ presets });
-      const name = screen.getByRole('button', { name: 'English' });
-      const english = name.parentElement!;
-      const terse = screen.getByRole('button', { name: 'Terse' }).parentElement!;
-      placeAt(english.parentElement!, 0, 500);
-      placeAt(english, 0, 60);
-      placeAt(terse, 70, 60);
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-      await user.pointer([
-        { keys: '[MouseLeft>]', target: name, coords: { clientX: 30, clientY: 12 } },
-        { coords: { clientX: 60, clientY: 12 } },
-        { coords: { clientX: 100, clientY: 12 } },
-        { keys: '[/MouseLeft]' },
-      ]);
+      try {
+        const { props } = renderPanel({ presets });
+        const name = screen.getByRole('button', { name: 'English' });
+        const english = name.parentElement!;
+        const terse = screen.getByRole('button', { name: 'Terse' }).parentElement!;
+        placeAt(english.parentElement!, 0, 500);
+        placeAt(english, 0, 60);
+        placeAt(terse, 70, 60);
 
-      expect(props.onMovePreset).toHaveBeenCalledWith('english', 'terse');
-      expect(screen.queryByLabelText('Text')).not.toBeInTheDocument();
+        await user.pointer([
+          { keys: '[MouseLeft>]', target: name, coords: { clientX: 30, clientY: 12 } },
+          { coords: { clientX: 60, clientY: 12 } },
+          { coords: { clientX: 100, clientY: 12 } },
+          { keys: '[/MouseLeft]' },
+        ]);
+
+        expect(props.onMovePreset).toHaveBeenCalledWith('english', 'terse');
+        expect(screen.queryByLabelText('Text')).not.toBeInTheDocument();
+      } finally {
+        // dnd-kit delays removing its document click blocker after a drag ends.
+        await act(async () => {
+          await vi.runOnlyPendingTimersAsync();
+        });
+        vi.useRealTimers();
+      }
     });
 
     it('ticks a preset from its badge', async () => {
