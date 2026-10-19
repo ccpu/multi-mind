@@ -44,7 +44,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # Tauri's `ICoreWebView2Controller`, so a different `windows` crate would be a
 # different, incompatible type.
 [target.'cfg(windows)'.dependencies]
-webview2-com = "0.38"
+webview2-com = "0.39"
 windows-core = "0.61"
 
 # Updating and staying in one process are desktop-only concerns; on mobile
