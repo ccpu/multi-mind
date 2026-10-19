@@ -7,7 +7,6 @@ import type {
 import type { GuestBounds } from '@internal/tauri-api';
 import {
   CLICKED_MESSAGE,
-  createPopupScripts,
   CTRL_ENTER_MESSAGE,
   decideGuestWindow,
   MENU_MESSAGE_PREFIX,
@@ -16,7 +15,7 @@ import {
   parsePrefixedMessage,
   PROMPT_ERROR_MESSAGE_PREFIX,
 } from '@internal/multi-mind';
-import { appApi } from '@internal/tauri-api';
+import { appApi, openExternal } from '@internal/tauri-api';
 import { useCallback, useEffect } from 'react';
 import { useGuestContextMenu } from './useGuestContextMenu';
 
@@ -61,12 +60,8 @@ export function useGuestMessages({
       return;
     }
 
-    if (decideGuestWindow(request) === 'popup') {
-      // Everything a site opens stays here, the way WebView2 opened it, on the
-      // profile the panes are signed in to — a sign-in finished in the user's
-      // own browser authorises a session this app never sees. Right-click's
-      // "Open Link in Browser" is the way out for a link that wants one.
-      appApi.guest.openPopup(request.url, createPopupScripts()).catch(console.error);
+    if (decideGuestWindow(request) === 'external') {
+      openExternal(request.url).catch(console.error);
     }
   }, []);
 

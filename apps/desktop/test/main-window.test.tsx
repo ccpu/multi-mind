@@ -1,6 +1,11 @@
 import type { AppSettings, GuestMessageEvent } from '@internal/multi-mind';
 import type { GuestPane, SearchEntry } from '@internal/tauri-api';
-import { DEFAULT_SETTINGS, DEFAULT_WEBSITES } from '@internal/multi-mind';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_WEBSITES,
+  OPEN_MESSAGE_PREFIX,
+} from '@internal/multi-mind';
+import { appApi, openExternal } from '@internal/tauri-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +27,7 @@ const settingsListeners = new Set<(settings: AppSettings) => void>();
 const guestListeners = new Set<(event: GuestMessageEvent) => void>();
 
 vi.mock('@internal/tauri-api', () => ({
-  openExternal: vi.fn(),
+  openExternal: vi.fn(async () => undefined),
   appApi: {
     invoke: {
       getSettings: async () => settingsGet(),
@@ -63,7 +68,7 @@ vi.mock('@internal/tauri-api', () => ({
       cookies: async () => [],
       deleteCookies: async () => undefined,
       openDevtools: async () => undefined,
-      openPopup: async () => undefined,
+      openPopup: vi.fn(async () => undefined),
       popupMenu: async () => null,
     },
   },
@@ -820,6 +825,22 @@ describe('main window', () => {
    * to start at and the scripts to run in it.
    */
   describe('embedded browsers', () => {
+    it('opens a guest link in the OS default browser without creating a popup', async () => {
+      render(<App />);
+      await waitForPanes();
+
+      const url = 'https://example.com/docs';
+      guestListeners.forEach((listener) =>
+        listener({
+          websiteId: 'claude',
+          message: `${OPEN_MESSAGE_PREFIX}${JSON.stringify({ url })}`,
+        }),
+      );
+
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith(url);
+      expect(appApi.guest.openPopup).not.toHaveBeenCalled();
+    });
+
     it('sends one pane per open site, with its scripts', async () => {
       settingsGet.mockResolvedValue(
         stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
