@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/ccpu/multi-mind/compare/v1.17.0...v1.17.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **release:** publish installer builds after release workflow repair ([291099e](https://github.com/ccpu/multi-mind/commit/291099e039345266c215022fa71934b86677d9a9))
+
 # [1.17.0](https://github.com/ccpu/multi-mind/compare/v1.16.0...v1.17.0) (2026-10-19)
 
 
