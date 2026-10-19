@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/ccpu/multi-mind/compare/v1.16.0...v1.17.0) (2026-10-19)
+
+
+### Features
+
+* **guest-windows:** update guest window handling to open links in the OS default browser ([087787a](https://github.com/ccpu/multi-mind/commit/087787a43f38b2ea48f24d26ca64e175d6eb9a92))
+
 # [1.16.0](https://github.com/ccpu/multi-mind/compare/v1.15.0...v1.16.0) (2026-10-12)
 
 
