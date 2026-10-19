@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/ccpu/multi-mind/compare/v1.15.0...v1.16.0) (2026-10-12)
+
+
+### Features
+
+* **prompts:** add prompt management features and UI enhancements ([365f7ab](https://github.com/ccpu/multi-mind/commit/365f7ab7202322ddc2f34ec3561d4e72977e11d1))
+
 # [1.15.0](https://github.com/ccpu/multi-mind/compare/v1.14.0...v1.15.0) (2026-10-04)
 
 
