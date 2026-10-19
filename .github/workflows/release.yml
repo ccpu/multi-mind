@@ -49,6 +49,26 @@ jobs:
       - name: Setup project
         uses: pixpilot/github-actions/setup-pnpm-project@v1
 
+      # semantic-release stores release channels in refs/notes/semantic-release-*
+      # and aborts the whole release when GitHub rejects that push (the release
+      # outputs below are then never written). This repository publishes a single
+      # channel, so the notes carry nothing needed: the shim skips only the notes
+      # push and forwards every other git command untouched.
+      - name: Skip semantic-release notes push
+        run: |
+          real_git="$(command -v git)"
+          mkdir -p "$RUNNER_TEMP/git-shim"
+          cat > "$RUNNER_TEMP/git-shim/git" <<EOF
+          #!/usr/bin/env bash
+          if [ "\$1" = "push" ] && [[ "\${!#}" == refs/notes/semantic-release-* ]]; then
+            echo "Skipping push of \${!#}" >&2
+            exit 0
+          fi
+          exec "$real_git" "\$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/git-shim/git"
+          echo "$RUNNER_TEMP/git-shim" >> "$GITHUB_PATH"
+
       # The exec plugin writes these outputs only when it creates a release.
       - name: Version, tag and release
         id: release
