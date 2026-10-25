@@ -60,7 +60,7 @@ describe('completion subscriptions', () => {
     expect(second).toHaveBeenCalledOnce();
   });
 
-  it('delivers toasts in either mode while the development guard is disabled', () => {
+  it('shows completion toasts only in development', () => {
     vi.stubEnv('DEV', true);
     const { unmount } = renderHook(() => useResponseCompletionToast([website]));
     responseTracker.begin(website.id, report.attemptId, website.url);
@@ -74,9 +74,7 @@ describe('completion subscriptions', () => {
     renderHook(() => useResponseCompletionToast([website]));
     responseTracker.begin(website.id, 'production', website.url);
     responseTracker.accept(website.id, { ...report, attemptId: 'production' });
-    expect(toast.success).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ title: 'chatgpt finished responding' }),
-    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('ignores stale reports, publishes once, and cancels closed providers', () => {

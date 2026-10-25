@@ -7,18 +7,17 @@ import { onAiResponseCompleted } from '../response-events';
 export function useResponseCompletionToast(websites: readonly WebsiteInfo[]): void {
   useEffect(
     () =>
-      // if (!import.meta.env.DEV) {
-      //   return undefined;
-      // }
-      onAiResponseCompleted((event) => {
-        const name =
-          websites.find((website) => website.id === event.websiteId)?.name ??
-          event.websiteId;
-        toast.success({
-          title: `${name} finished responding`,
-          description: 'Response completion detected',
-        });
-      }),
+      import.meta.env.DEV
+        ? onAiResponseCompleted((event) => {
+            const name =
+              websites.find((website) => website.id === event.websiteId)?.name ??
+              event.websiteId;
+            toast.success({
+              title: `${name} finished responding`,
+              description: 'Response completion detected',
+            });
+          })
+        : undefined,
     [websites],
   );
 }
