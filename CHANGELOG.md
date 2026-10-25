@@ -1,3 +1,17 @@
+# [1.18.0](https://github.com/ccpu/multi-mind/compare/v1.17.1...v1.18.0) (2026-10-25)
+
+
+### Bug Fixes
+
+* **tauri:** update dev server port and CSP URLs ([bd87878](https://github.com/ccpu/multi-mind/commit/bd8787828b5c5e4d66855a2d4623c91e6c445521))
+
+
+### Features
+
+* **browser-automation:** add host-driven prompt automation ([17b96be](https://github.com/ccpu/multi-mind/commit/17b96be1409e457bc2440189ef15d84aea70a0e4))
+* **desktop:** add richer prompt presets and native overlays ([c8a5d59](https://github.com/ccpu/multi-mind/commit/c8a5d59782f704db9f4704ad8fcf99c3a9f7f8f3))
+* **response-completion:** track completed AI responses ([9a9e4de](https://github.com/ccpu/multi-mind/commit/9a9e4de40c1ecd2ed1d8bf1c01df33c2ceaa7c2a))
+
 ## [1.17.1](https://github.com/ccpu/multi-mind/compare/v1.17.0...v1.17.1) (2026-10-19)
 
 
