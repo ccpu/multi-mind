@@ -1,4 +1,4 @@
-import type { WebsiteInfo } from '@internal/multi-mind';
+import type { ResponseSelectors, WebsiteInfo } from '@internal/multi-mind';
 import type { ChangeEvent } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -7,6 +7,7 @@ import { cn, Label, Switch } from '@pixpilot/shadcn';
 import { Button, Input, showConfirmDialog } from '@pixpilot/shadcn-ui';
 import { ChevronRight, GripVertical, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
+import { ResponseSelectorFields } from './websites/ResponseSelectorFields';
 
 type WebsitePatch = Partial<Omit<WebsiteInfo, 'id'>>;
 
@@ -104,6 +105,10 @@ export function WebsiteRow({
 
   const handleChangeButtonSelector = useCallback(
     (buttonSelector: string) => onChange(website.id, { buttonSelector }),
+    [onChange, website.id],
+  );
+  const handleChangeResponseSelectors = useCallback(
+    (responseSelectors: ResponseSelectors) => onChange(website.id, { responseSelectors }),
     [onChange, website.id],
   );
 
@@ -215,6 +220,11 @@ export function WebsiteRow({
                 value={shown.buttonSelector}
                 placeholder='button[type="submit"]'
                 onChange={handleChangeButtonSelector}
+              />
+              <ResponseSelectorFields
+                websiteId={website.id}
+                value={shown.responseSelectors}
+                onChange={handleChangeResponseSelectors}
               />
             </>
           )}

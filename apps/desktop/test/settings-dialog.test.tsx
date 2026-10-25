@@ -243,10 +243,31 @@ describe('settings window', () => {
     expect(screen.getByLabelText('Use the built-in settings')).toBeChecked();
     expect(screen.queryByLabelText('URL')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Assistant response selector'),
+    ).not.toBeInTheDocument();
     // The row still shows the built-in definition rather than what was typed.
     expect(
       screen.getByRole('button', { expanded: true, name: /claude/u }),
     ).toHaveTextContent(seededClaude().url);
+  });
+
+  it('edits completion selectors alongside the composer selectors', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(stub({ websites: [ownClaude()] }));
+    render(<App />);
+    await user.click(
+      await screen.findByRole('button', { expanded: false, name: /claude/u }),
+    );
+    const field = screen.getByLabelText('Assistant response selector');
+    await user.clear(field);
+    await user.type(field, '.my-answer');
+    const websites = await lastSavedWebsites();
+    expect(websites[0]?.responseSelectors.responseSelector).toBe('.my-answer');
+    expect(websites[0]?.responseSelectors.completeSelector).toBe(
+      seededClaude().responseSelectors.completeSelector,
+    );
+    expect(websites[0]?.inputSelector).toBe(seededClaude().inputSelector);
   });
 
   it('brings the fields back when the site stops following the built-in one', async () => {

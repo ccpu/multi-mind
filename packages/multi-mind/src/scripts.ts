@@ -8,6 +8,8 @@ import {
   PAGE_MESSAGE_PREFIX,
   PROMPT_ERROR_MESSAGE_PREFIX,
 } from './messages';
+import { createResponseObserverScript } from './response-completion/create-response-observer-script';
+import { RESPONSE_MESSAGE_PREFIX } from './response-completion/types';
 
 /**
  * Port of the scripts `WebViewManager.LoadScriptsAsync` pushed into each
@@ -373,6 +375,13 @@ export function createRunPromptScript(
   const bridge = JSON.stringify(bridgeKey);
   const errorPrefix = JSON.stringify(PROMPT_ERROR_MESSAGE_PREFIX);
   const attempt = JSON.stringify(attemptId);
+  const responsePrefix = JSON.stringify(RESPONSE_MESSAGE_PREFIX);
+  const observeResponse = createResponseObserverScript(
+    website,
+    prompt,
+    { findKey, bridgeKey },
+    attemptId,
+  );
 
   return asVoidScript(`
     (function () {
@@ -483,7 +492,7 @@ export function createRunPromptScript(
 
       var inputValue = ${promptLiteral};
 
-      function waitFor(selector, timeout, onFound, onMissing) {
+      function waitFor(selector, timeout, onFound, onMissing, requireEnabled = false) {
         var deadline = Date.now() + timeout;
         function check() {
           var element;
@@ -493,7 +502,7 @@ export function createRunPromptScript(
             onMissing();
             return;
           }
-          if (element) {
+          if (element && (!requireEnabled || (!element.disabled && element.getAttribute('aria-disabled') !== 'true'))) {
             onFound(element);
           } else if (Date.now() < deadline) {
             setTimeout(check, 100);
@@ -553,11 +562,24 @@ export function createRunPromptScript(
               return;
             }
             waitFor(${buttonSelector}, 3000, function (submitButton) {
-              submitButton.disabled = false;
+              var canSubmit = true;
+              try {
+                canSubmit = ${observeResponse};
+              } catch (error) {
+                console.error('Unable to install response observer:', error);
+                window[${bridge}].postMessage(${responsePrefix} + JSON.stringify({
+                  attemptId: ${attempt}, status: 'unknown', responseId: '',
+                  url: location.href, reason: 'observer-install-failed'
+                }));
+              }
+              if (!canSubmit) {
+                reportFailure('button', ${buttonSelector});
+                return;
+              }
               submitButton.click();
             }, function () {
               reportFailure('button', ${buttonSelector});
-            });
+            }, true);
           }, 1000);
         }, 150);
       }

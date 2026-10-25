@@ -10,6 +10,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/windows/main/App';
+import { onAiResponseCompleted } from '../src/windows/main/response-completion';
 
 const settingsGet = vi.fn<() => Promise<AppSettings>>();
 const settingsSave = vi.fn<(patch: Partial<AppSettings>) => Promise<AppSettings>>();
@@ -313,6 +314,44 @@ describe('main window', () => {
       screen.getByRole('button', { name: 'Dismiss chatgpt prompt error' }),
     );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('delivers completion to feature subscribers after submitting through the main prompt box', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ promptEditor: 'plain', activeWebsites: ['chatgpt'] }),
+    );
+    const completed = vi.fn();
+    const stop = onAiResponseCompleted(completed);
+    try {
+      render(<App />);
+      await user.type(
+        await screen.findByPlaceholderText(/Ask every enabled model/u),
+        'hello',
+      );
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      await waitFor(() => expect(guestRun).toHaveBeenCalled());
+      const script = guestRun.mock.calls[0]?.[1] ?? '';
+      const attemptId = script.match(/attemptId: "(?<id>[^"]+)"/u)?.groups?.['id'];
+      expect(attemptId).toBeDefined();
+      for (const status of ['observing', 'generating', 'completed', 'completed']) {
+        guestListeners.forEach((listener) =>
+          listener({
+            websiteId: 'chatgpt',
+            message: `__response__${JSON.stringify({ attemptId, status, responseId: 'answer', url: 'https://chatgpt.com/c/one' })}`,
+          }),
+        );
+      }
+      expect(completed).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          websiteId: 'chatgpt',
+          attemptId,
+          responseId: 'answer',
+        }),
+      );
+    } finally {
+      stop();
+    }
   });
 
   it('sends the prompt to the one browser picked under Conversation', async () => {

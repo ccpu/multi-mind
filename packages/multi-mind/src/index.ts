@@ -5,6 +5,7 @@ export * from './ids';
 export * from './layout';
 export * from './messages';
 export * from './prompts';
+export * from './response-completion';
 export * from './scripts';
 export * from './settings';
 export * from './settings-location';

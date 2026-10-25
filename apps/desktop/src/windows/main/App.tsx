@@ -30,6 +30,8 @@ import { useOverlayPresence } from './hooks/useOverlayPresence';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useSplitLayout } from './hooks/useSplitLayout';
 import { useUsedPresets } from './hooks/useUsedPresets';
+import { useAiResponseTracking } from './response-completion/hooks/use-ai-response-tracking';
+import { useResponseCompletionToast } from './response-completion/hooks/use-response-completion-toast';
 
 /**
  * Port of `Multi Mind/MainForm.cs`. The three docked WinForms panels become three
@@ -82,6 +84,12 @@ function App() {
   // What the menu bar offers, and which of those browsers are actually open.
   const menuWebsites = useMemo(() => getMenuWebsites(settings), [settings]);
   const activeWebsites = useMemo(() => getActiveWebsites(settings), [settings]);
+  const {
+    begin: beginResponse,
+    cancel: cancelResponse,
+    report: reportResponse,
+  } = useAiResponseTracking(activeWebsites);
+  useResponseCompletionToast(settings.websites);
 
   // Panes only exist once the guest config is known, so the split has to wait
   // for it too.
@@ -108,11 +116,15 @@ function App() {
   }, []);
 
   const { recordPrompt, reportPage, stopTracking } = useSearchHistory();
-  const handlePromptError = useCallback((websiteId: string, error: GuestPromptError) => {
-    if (attemptsRef.current.get(websiteId) === error.attemptId) {
-      setPromptErrors((current) => ({ ...current, [websiteId]: error }));
-    }
-  }, []);
+  const handlePromptError = useCallback(
+    (websiteId: string, error: GuestPromptError) => {
+      if (attemptsRef.current.get(websiteId) === error.attemptId) {
+        cancelResponse(websiteId);
+        setPromptErrors((current) => ({ ...current, [websiteId]: error }));
+      }
+    },
+    [cancelResponse],
+  );
   const dismissPromptError = useCallback((websiteId: string) => {
     setPromptErrors((current) => {
       const next = { ...current };
@@ -124,6 +136,7 @@ function App() {
     boundsOf,
     onClicked: collapsePrompt,
     onPageReported: reportPage,
+    onResponseReported: reportResponse,
     onPromptError: handlePromptError,
   });
 
@@ -231,6 +244,7 @@ function App() {
       websites.forEach((website) => {
         const attemptId = createId('prompt-attempt');
         attemptsRef.current.set(website.id, attemptId);
+        beginResponse(website, attemptId);
         dismissPromptError(website.id);
         appApi.guest
           .run(
@@ -247,6 +261,9 @@ function App() {
               });
             },
             (error: unknown) => {
+              if (attemptsRef.current.get(website.id) === attemptId) {
+                cancelResponse(website.id);
+              }
               console.error(`Failed to run the prompt on ${website.name}:`, error);
             },
           );
@@ -261,7 +278,14 @@ function App() {
       setPrompt('');
       setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
     },
-    [dismissPromptError, markPresetsSent, recordPrompt, unusedPresets],
+    [
+      beginResponse,
+      cancelResponse,
+      dismissPromptError,
+      markPresetsSent,
+      recordPrompt,
+      unusedPresets,
+    ],
   );
 
   const runPrompt = useCallback(() => sendPrompt(), [sendPrompt]);
@@ -280,11 +304,12 @@ function App() {
       );
       openable.forEach((conversation) => {
         stopTracking(conversation.websiteId);
+        cancelResponse(conversation.websiteId);
         openUrl(conversation.websiteId, conversation.url);
       });
       openWebsites(openable.map((conversation) => conversation.websiteId));
     },
-    [openUrl, openWebsites, stopTracking],
+    [cancelResponse, openUrl, openWebsites, stopTracking],
   );
 
   /**
@@ -296,11 +321,12 @@ function App() {
     resetUsedPresets();
     getActiveWebsites(settingsRef.current).forEach((website) => {
       stopTracking(website.id);
+      cancelResponse(website.id);
       appApi.guest.navigate(website.id, website.url).catch((error: unknown) => {
         console.error(`Failed to reload ${website.name}:`, error);
       });
     });
-  }, [resetUsedPresets, stopTracking, untickChatPresets]);
+  }, [cancelResponse, resetUsedPresets, stopTracking, untickChatPresets]);
 
   /** Ticking a preset afresh, either way, means it should go out again. */
   const handleTogglePreset = useCallback(

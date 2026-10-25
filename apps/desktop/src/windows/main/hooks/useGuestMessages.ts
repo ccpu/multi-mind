@@ -3,6 +3,7 @@ import type {
   GuestPageReport,
   GuestPromptError,
   GuestWindowRequest,
+  ResponseReport,
 } from '@internal/multi-mind';
 import type { GuestBounds } from '@internal/tauri-api';
 import {
@@ -13,7 +14,9 @@ import {
   OPEN_MESSAGE_PREFIX,
   PAGE_MESSAGE_PREFIX,
   parsePrefixedMessage,
+  parseResponseReport,
   PROMPT_ERROR_MESSAGE_PREFIX,
+  RESPONSE_MESSAGE_PREFIX,
 } from '@internal/multi-mind';
 import { appApi, openExternal } from '@internal/tauri-api';
 import { useCallback, useEffect } from 'react';
@@ -26,6 +29,7 @@ export interface UseGuestMessagesOptions {
   onClicked: () => void;
   onPageReported?: (websiteId: string, page: GuestPageReport) => void;
   onPromptError?: (websiteId: string, error: GuestPromptError) => void;
+  onResponseReported?: (websiteId: string, report: ResponseReport) => void;
 }
 
 /**
@@ -47,6 +51,7 @@ export function useGuestMessages({
   onClicked,
   onPageReported,
   onPromptError,
+  onResponseReported,
 }: UseGuestMessagesOptions): void {
   const showContextMenu = useGuestContextMenu({ boundsOf });
 
@@ -85,6 +90,15 @@ export function useGuestMessages({
 
   const handleMessage = useCallback(
     ({ websiteId, message }: { websiteId: string; message: string }) => {
+      if (message.startsWith(RESPONSE_MESSAGE_PREFIX)) {
+        const report = parseResponseReport(message);
+        if (report !== null) {
+          onResponseReported?.(websiteId, report);
+        } else {
+          console.warn('[AI response]', websiteId, 'invalid response report');
+        }
+        return;
+      }
       if (message === CLICKED_MESSAGE) {
         onClicked();
         return;
@@ -142,7 +156,14 @@ export function useGuestMessages({
 
       console.error('Unexpected message from an embedded browser:', message);
     },
-    [handleMenuRequest, handleOpenRequest, onClicked, onPageReported, onPromptError],
+    [
+      handleMenuRequest,
+      handleOpenRequest,
+      onClicked,
+      onPageReported,
+      onPromptError,
+      onResponseReported,
+    ],
   );
 
   useEffect(() => appApi.events.onGuestMessage(handleMessage), [handleMessage]);

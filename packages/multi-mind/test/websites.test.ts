@@ -47,6 +47,30 @@ describe('createWebsite', () => {
 });
 
 describe('normalizeWebsite', () => {
+  it('migrates completion selectors from DEFAULT_WEBSITES without changing existing composer selectors', () => {
+    const stored = normalizeWebsite({
+      id: 'chatgpt',
+      name: 'renamed',
+      inputSelector: '#my-input',
+    });
+    expect(stored?.responseSelectors).toEqual({
+      ...BLANK_WEBSITE.responseSelectors,
+      ...CHATGPT.responseSelectors,
+    });
+    expect(stored?.inputSelector).toBe('#my-input');
+  });
+
+  it('preserves custom completion selectors and explicit empty fields', () => {
+    const stored = normalizeWebsite({
+      id: 'chatgpt',
+      responseSelectors: { responseSelector: '.answer', busySelector: '' },
+    });
+    expect(stored?.responseSelectors.responseSelector).toBe('.answer');
+    expect(stored?.responseSelectors.busySelector).toBe('');
+    expect(stored?.responseSelectors.completeSelector).toBe(
+      CHATGPT.responseSelectors.completeSelector,
+    );
+  });
   it('fills in the fields a hand-edited settings file left out', () => {
     expect(normalizeWebsite({ name: 'local', url: 'http://localhost/' })).toStrictEqual({
       id: 'local',
@@ -54,6 +78,7 @@ describe('normalizeWebsite', () => {
       url: 'http://localhost/',
       inputSelector: BLANK_WEBSITE.inputSelector,
       buttonSelector: BLANK_WEBSITE.buttonSelector,
+      responseSelectors: BLANK_WEBSITE.responseSelectors,
       enabled: true,
       useDefaults: false,
     });
@@ -76,6 +101,20 @@ describe('normalizeWebsite', () => {
 });
 
 describe('resolveWebsite', () => {
+  it('uses completion defaults while preserving custom values for switching back', () => {
+    const stored = {
+      ...CHATGPT,
+      responseSelectors: {
+        ...CHATGPT.responseSelectors,
+        responseSelector: '.custom-answer',
+      },
+    };
+    expect(resolveWebsite(stored).responseSelectors).toEqual(CHATGPT.responseSelectors);
+    expect(
+      resolveWebsite({ ...stored, useDefaults: false }).responseSelectors
+        .responseSelector,
+    ).toBe('.custom-answer');
+  });
   it('answers with the seeded definition while the site follows it', () => {
     const edited = { ...CHATGPT, url: 'https://mine.test/', inputSelector: '#mine' };
 

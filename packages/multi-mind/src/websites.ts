@@ -1,4 +1,6 @@
+import type { ResponseSelectors } from './response-completion/normalize-response-selectors';
 import { createId } from './ids';
+import { normalizeResponseSelectors } from './response-completion/normalize-response-selectors';
 
 /**
  * Port of `Multi Mind/Models/Website.cs` (`WebsiteInfo`) and the `websites` field of
@@ -20,6 +22,7 @@ export interface WebsiteInfo {
   readonly url: string;
   readonly inputSelector: string;
   readonly buttonSelector: string;
+  readonly responseSelectors: ResponseSelectors;
   /** Whether the site gets a toggle in the main window's menu bar. */
   readonly enabled: boolean;
   /**
@@ -46,6 +49,16 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     url: 'https://claude.ai/new',
     inputSelector: '[contenteditable]',
     buttonSelector: "button[aria-label='Send message']",
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector: '[data-testid="assistant-message"], [data-is-streaming]',
+      userSelector: '[data-testid="user-message"]',
+      turnSelector: '[data-testid="assistant-message"], [data-test-render-count]',
+      busySelector:
+        '[data-is-streaming="true"], button[aria-label="Stop response"], button[aria-label="Stop generating"]',
+      completeSelector:
+        'button[data-testid="action-bar-copy"], button[aria-label="Copy"], button[aria-label="Copy response"]',
+    },
     enabled: true,
   }),
   seed({
@@ -55,6 +68,18 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
       '[data-composer-markdown][contenteditable="true"], #prompt-textarea[contenteditable="true"], div.ProseMirror[contenteditable="true"][role="textbox"], div[contenteditable="true"][role="textbox"]',
     enabled: true,
     buttonSelector: 'button[type="submit"][aria-label="Send"]',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector:
+        '[data-markdown-text-style="assistant-message"], [data-message-author-role="assistant"]',
+      userSelector:
+        '[data-user-message-bubble="true"], [data-message-author-role="user"]',
+      turnSelector: '[data-talvt-turn-state], article',
+      busySelector:
+        '[data-talvt-turn-state]:not([data-talvt-turn-state="complete"]), [data-testid="stop-button"], button[aria-label="Stop generating"], [data-is-streaming="true"]',
+      completeSelector:
+        'button[aria-label="Copy"], button[data-testid="copy-turn-action-button"]',
+    },
   }),
   seed({
     name: 'gemini',
@@ -62,6 +87,16 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     inputSelector: '[contenteditable]',
     enabled: true,
     buttonSelector: '.send-button',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector: 'model-response',
+      userSelector: 'user-query',
+      turnSelector: 'model-response',
+      busySelector:
+        'button.stop-button, button[aria-label="Stop response"], .send-button.stop',
+      completeSelector:
+        'button[aria-label="Copy"], button[data-test-id="copy-button"], button[data-test-id="copy-response-button"], button[aria-label="Copy response"]',
+    },
   }),
   seed({
     name: 'deepseek',
@@ -70,6 +105,15 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     enabled: true,
     buttonSelector:
       'div[role="button"].ds-button--primary.ds-button--filled.ds-button--circle',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector: '.ds-message:has(.ds-markdown)',
+      turnSelector: '.ds-message',
+      busySelector:
+        '[aria-label="Stop generating"], [aria-label="Stop response"], [data-is-streaming="true"]',
+      completeSelector:
+        '[role="button"][aria-label="Copy"], button[aria-label="Copy"], [data-testid="copy-response-button"]',
+    },
   }),
   seed({
     name: 'grok',
@@ -77,6 +121,16 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     inputSelector: 'textarea[placeholder="Ask anything"][autocapitalize="sentences"]',
     enabled: false,
     buttonSelector: 'button[aria-label="Grok something"][role="button"][type="button"]',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector:
+        '[data-message-role="assistant"], [data-message-author-role="assistant"]',
+      turnSelector:
+        '[data-message-role="assistant"], [data-message-author-role="assistant"]',
+      busySelector:
+        'button[aria-label="Stop generating"], button[aria-label="Stop response"]',
+      completeSelector: 'button[aria-label="Copy"], button[aria-label="Copy response"]',
+    },
   }),
   seed({
     name: 'perplexity',
@@ -84,6 +138,13 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     inputSelector:
       '#ask-input[contenteditable="true"][role="textbox"][data-lexical-editor="true"]',
     buttonSelector: 'button[aria-label="Submit"][type="button"]',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector: '[data-testid="answer"], [data-message-role="assistant"]',
+      turnSelector: '[data-testid="answer"], [data-message-role="assistant"]',
+      busySelector: 'button[aria-label="Stop generating"], button[aria-label="Stop"]',
+      completeSelector: 'button[aria-label="Copy"], button[aria-label="Copy answer"]',
+    },
     enabled: false,
   }),
 
@@ -97,6 +158,14 @@ export const DEFAULT_WEBSITES: readonly WebsiteInfo[] = [
     // runner looks for the button after it has filled the input rather than
     // up front.
     buttonSelector: 'button.send-button[aria-label="Send"]',
+    responseSelectors: {
+      errorSelector: '[role="alert"]',
+      responseSelector: '[data-message-role="assistant"], .chat-assistant',
+      turnSelector: '[data-message-role="assistant"], .chat-assistant',
+      busySelector:
+        'button[aria-label="Stop generating"], button[aria-label="Stop"], button.stop-button',
+      completeSelector: 'button[aria-label="Copy"], button[aria-label="Copy response"]',
+    },
   }),
 ];
 
@@ -106,6 +175,14 @@ export const BLANK_WEBSITE: WebsiteDraft = {
   url: '',
   inputSelector: 'textarea',
   buttonSelector: 'button[type="submit"]',
+  responseSelectors: {
+    responseSelector: '',
+    turnSelector: '',
+    busySelector: '',
+    completeSelector: '',
+    userSelector: '',
+    errorSelector: '',
+  },
   enabled: true,
   // A site the user adds is theirs; there is no seed for it to follow.
   useDefaults: false,
@@ -165,6 +242,7 @@ export function normalizeWebsite(value: unknown): WebsiteInfo | null {
 
   const source = value as Partial<Record<keyof WebsiteInfo, unknown>>;
   const name = asString(source.name, '');
+  const defaults = getWebsiteSeed(asString(source.id, name));
 
   return {
     // Pre-catalogue settings files stored sites by name and had no id at all.
@@ -173,6 +251,10 @@ export function normalizeWebsite(value: unknown): WebsiteInfo | null {
     url: asString(source.url, ''),
     inputSelector: asString(source.inputSelector, BLANK_WEBSITE.inputSelector),
     buttonSelector: asString(source.buttonSelector, BLANK_WEBSITE.buttonSelector),
+    responseSelectors: normalizeResponseSelectors(
+      source.responseSelectors,
+      defaults?.responseSelectors,
+    ),
     enabled: typeof source.enabled === 'boolean' ? source.enabled : true,
     // A settings file written before the flag existed holds fields the user
     // may well have edited, so it keeps them rather than being pulled back to
