@@ -1,4 +1,4 @@
-import type { GuestConfig, GuestPromptError } from '@internal/multi-mind';
+import type { GuestConfig, GuestPromptError, PromptPreset } from '@internal/multi-mind';
 import type { SearchConversation } from '@internal/tauri-api';
 import type { PromptEditorHandle } from './types/prompt-editor';
 import {
@@ -148,11 +148,9 @@ function App() {
   }, []);
 
   /**
-   * A guest is a native child webview drawn over the window, so it swallows the
-   * pointer while the cursor is over it and covers anything the page puts
-   * there. Electron's `<webview>` had the same two problems and the same
-   * answer: take the browsers out of the way while a gutter is being dragged or
-   * a popover is open, and put them back afterwards.
+   * Dragging still hides native browsers to release pointer capture. Windows
+   * overlays clip only the covered browser pixels; other platforms retain the
+   * visibility fallback until native clipping is available there.
    */
   useEffect(() => {
     appApi.guest.setVisible(!dragging && !overlayOpen).catch((error: unknown) => {
@@ -221,11 +219,17 @@ function App() {
    * altogether.
    */
   const sendPrompt = useCallback(
-    (onlyWebsiteId?: string) => {
-      const typedPrompt = promptTextRef.current;
+    (onlyWebsiteId?: string, immediatePreset?: PromptPreset) => {
+      const typedPrompt = immediatePreset === undefined ? promptTextRef.current : '';
       const guestGlobals = guestConfigRef.current;
-      const presets = promptsToSend(unusedPresets(getActivePrompts(settingsRef.current)));
-      const composed = composePrompt(typedPrompt, presets);
+      const presets =
+        immediatePreset === undefined
+          ? promptsToSend(unusedPresets(getActivePrompts(settingsRef.current)))
+          : [];
+      const composed = composePrompt(
+        typedPrompt,
+        immediatePreset === undefined ? presets : [immediatePreset],
+      );
 
       if (composed === '' || guestGlobals === null) {
         return;
@@ -264,6 +268,10 @@ function App() {
             },
           );
       });
+
+      if (immediatePreset !== undefined) {
+        return;
+      }
 
       // Only what was typed is worth stepping back to; the presets re-apply
       // themselves, and an empty entry would just be a dead stop in the history.
@@ -324,13 +332,18 @@ function App() {
     });
   }, [cancelResponse, resetUsedPresets, stopTracking, untickChatPresets]);
 
-  /** Ticking a preset afresh, either way, means it should go out again. */
+  /** Sends an immediate preset, or toggles a preset to join the next message. */
   const handleTogglePreset = useCallback(
     (promptId: string) => {
+      const preset = settingsRef.current.prompts.find((entry) => entry.id === promptId);
+      if (preset?.sendImmediately === true) {
+        sendPrompt(undefined, preset);
+        return;
+      }
       reusePreset(promptId);
       togglePreset(promptId);
     },
-    [reusePreset, togglePreset],
+    [reusePreset, sendPrompt, togglePreset],
   );
 
   const goLastPrompt = useCallback(() => {
@@ -434,7 +447,7 @@ function App() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

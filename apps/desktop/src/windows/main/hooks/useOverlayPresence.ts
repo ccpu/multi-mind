@@ -1,61 +1,79 @@
+import { appApi } from '@internal/tauri-api';
 import { useEffect, useState } from 'react';
+import { measureOverlays } from '../utils/browser-overlays/measure-overlays';
 
-/**
- * Whatever the app draws over the browser row, a popover or a dialog, portals
- * itself to the end of the document. These are the shapes it lands in.
- */
-const OVERLAY_SELECTOR = [
-  '[data-radix-popper-content-wrapper]',
-  '[data-slot="dialog-overlay"]',
-  '[role="dialog"]',
-  '[role="menu"]',
-].join(',');
+export { clearOfBrowsers } from '../utils/browser-overlays/measure-overlays';
 
-/**
- * Marks floating content placed so that it never reaches the browser row, and
- * so can show without the browsers being taken out of the way.
- */
-const CLEAR_OF_BROWSERS_ATTRIBUTE = 'data-clear-of-browsers';
-
-const CLEAR_OF_BROWSERS_SELECTOR = `[${CLEAR_OF_BROWSERS_ATTRIBUTE}]`;
-
-/** Spread onto floating content that stays clear of the browsers. */
-export const clearOfBrowsers = { [CLEAR_OF_BROWSERS_ATTRIBUTE]: '' } as const;
-
-function coversBrowsers(overlay: Element): boolean {
-  return (
-    !overlay.matches(CLEAR_OF_BROWSERS_SELECTOR) &&
-    overlay.querySelector(CLEAR_OF_BROWSERS_SELECTOR) === null
-  );
-}
-
-/**
- * Whether anything is currently floating over the window.
- *
- * An embedded browser is a native child webview, which means it is drawn over
- * the page rather than in it — there is no z-index that puts a popover in front
- * of one. Electron had the same rule for a `<webview>` and the same answer for
- * it: take the browsers out of the way while something is over them.
- *
- * It is watched rather than wired, so the components that came over from the
- * Electron port did not have to learn about it. The cost of the watch being
- * wrong is a popover hidden for a moment, never a broken window.
- */
+/** Keeps floating UI above live Windows browsers; returns whether a fallback must hide them. */
 export function useOverlayPresence(): boolean {
-  const [open, setOpen] = useState(false);
+  const [fallbackOpen, setFallbackOpen] = useState(false);
 
   useEffect(() => {
-    const check = () =>
-      setOpen(
-        Array.from(document.querySelectorAll(OVERLAY_SELECTOR)).some(coversBrowsers),
-      );
+    let cancelled = false;
+    let frame: number | null = null;
+    let sending = false;
+    let lastSent = '';
+    let latest = measureOverlays();
+    let latestKey = JSON.stringify(latest);
+
+    const flush = async () => {
+      if (sending || cancelled || latestKey === lastSent) {
+        return;
+      }
+      sending = true;
+      const layout = latest;
+      const key = latestKey;
+      lastSent = key;
+      try {
+        const clipped = await appApi.guest.setOverlays(layout.overlays, layout.modal);
+        if (!cancelled && key === latestKey) {
+          setFallbackOpen(layout.open && !clipped);
+        }
+      } catch (error) {
+        console.error('Failed to position browser overlays:', error);
+        if (!cancelled && key === latestKey) {
+          setFallbackOpen(layout.open);
+        }
+      } finally {
+        sending = false;
+        if (!cancelled && latestKey !== key) {
+          void flush();
+        }
+      }
+    };
+
+    const check = () => {
+      latest = measureOverlays();
+      latestKey = JSON.stringify(latest);
+      void flush();
+      // Transforms move toasts/popovers without resizing their DOM boxes.
+      if (latest.open && frame === null) {
+        frame = requestAnimationFrame(() => {
+          frame = null;
+          check();
+        });
+      }
+    };
 
     const observer = new MutationObserver(check);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    window.addEventListener('resize', check);
+    document.addEventListener('scroll', check, true);
     check();
 
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+      window.removeEventListener('resize', check);
+      document.removeEventListener('scroll', check, true);
+      appApi.guest.setOverlays([], false).catch((error: unknown) => {
+        console.error('Failed to restore browser regions:', error);
+      });
+    };
   }, []);
 
-  return open;
+  return fallbackOpen;
 }

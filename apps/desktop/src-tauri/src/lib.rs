@@ -8,6 +8,7 @@
 //! native menu over one, and look for a new release.
 
 mod browser_automation;
+mod browser_overlays;
 mod commands;
 mod guest;
 mod identity;
@@ -54,6 +55,7 @@ pub fn run() {
             guest::get_guest_config,
             guest::guest_sync,
             guest::guest_set_visible,
+            browser_overlays::guest_set_overlays,
             guest::guest_navigate,
             guest::guest_reload,
             guest::guest_eval,
@@ -109,6 +111,10 @@ pub fn run() {
                 // closing windows all day would leave a row's worth of
                 // injected scripts behind for each one.
                 tauri::WindowEvent::Destroyed => {
+                    window
+                        .app_handle()
+                        .state::<browser_overlays::BrowserOverlays>()
+                        .remove(label);
                     guest::on_window_closed(window.app_handle(), label);
                 }
                 _ => {}
@@ -131,6 +137,7 @@ pub fn run() {
             #[cfg(windows)]
             app.manage(guest::BrowserArguments::from_settings(&saved_settings));
             app.manage(guest::GuestHost::new(guest::profile_directory(&handle)));
+            app.manage(browser_overlays::BrowserOverlays::default());
             app.manage(menu::PendingMenu::default());
             app.manage(browser_automation::BrowserAutomation::default());
 

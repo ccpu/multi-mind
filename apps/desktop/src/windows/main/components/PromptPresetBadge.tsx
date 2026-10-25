@@ -4,8 +4,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { promptPresetLabel } from '@internal/multi-mind';
 import { Checkbox, cn } from '@pixpilot/shadcn';
-import { Popover, PopoverContent, PopoverTrigger } from '@pixpilot/shadcn-ui';
-import { RotateCcw } from 'lucide-react';
+import { Button, Popover, PopoverContent, PopoverTrigger } from '@pixpilot/shadcn-ui';
+import { RotateCcw, SendHorizontal } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { OverriddenTooltip } from './OverriddenTooltip';
 import { promptSurface } from './prompt-surface';
@@ -108,7 +108,7 @@ export function PromptPresetBadge({
         <BadgeShell
           ref={setNodeRef}
           {...listeners}
-          checked={checked}
+          checked={!preset.sendImmediately && checked}
           overridden={overridden}
           style={{ transform: CSS.Translate.toString(transform), transition }}
           className={cn(
@@ -116,12 +116,26 @@ export function PromptPresetBadge({
             isDragging && 'relative z-10 cursor-grabbing shadow-md',
           )}
         >
-          <Checkbox
-            className={cn('size-3.5', used && !overridden && 'opacity-50')}
-            checked={checked}
-            aria-label={`Use ${label}`}
-            onCheckedChange={handleToggle}
-          />
+          {preset.sendImmediately ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-3.5 p-0 [&_svg]:size-3.5"
+              aria-label={`Send ${label} now`}
+              title={`Send ${label} to enabled pages`}
+              onClick={handleToggle}
+            >
+              <SendHorizontal className="-rotate-90" />
+            </Button>
+          ) : (
+            <Checkbox
+              className={cn('size-3.5', used && !overridden && 'opacity-50')}
+              checked={checked}
+              aria-label={`Use ${label}`}
+              onCheckedChange={handleToggle}
+            />
+          )}
           {used && (
             <button
               type="button"
@@ -169,7 +183,7 @@ export function PromptPresetBadgeGhost({
   used,
 }: Pick<PromptPresetBadgeProps, 'checked' | 'preset' | 'used'>) {
   return (
-    <BadgeShell checked={checked}>
+    <BadgeShell checked={!preset.sendImmediately && checked}>
       <span className="size-3.5" />
       <span className="max-w-40 truncate">{promptPresetLabel(preset)}</span>
       {used && <span className="size-3" />}

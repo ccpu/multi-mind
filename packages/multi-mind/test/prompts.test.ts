@@ -21,6 +21,7 @@ function preset(overrides: Partial<PromptPreset> = {}): PromptPreset {
     name: 'English',
     value: 'Answer in English.',
     location: 'end',
+    sendImmediately: false,
     sendOnce: false,
     untickOnNewChat: false,
     overrideOthers: false,
@@ -49,6 +50,7 @@ describe('normalizePromptPreset', () => {
       name: '',
       value: 'Be terse.',
       location: BLANK_PROMPT_PRESET.location,
+      sendImmediately: false,
       sendOnce: false,
       untickOnNewChat: false,
       overrideOthers: false,
@@ -80,6 +82,16 @@ describe('normalizePromptPreset', () => {
 
   it('rejects an entry that is not an object', () => {
     expect(normalizePromptPreset('Be terse.')).toBeNull();
+  });
+
+  it('keeps immediate sending opt-in for stored presets', () => {
+    expect(normalizePromptPreset({ id: 'a' })?.sendImmediately).toBe(false);
+    expect(
+      normalizePromptPreset({ id: 'a', sendImmediately: 'yes' })?.sendImmediately,
+    ).toBe(false);
+    expect(
+      normalizePromptPreset({ id: 'a', sendImmediately: true })?.sendImmediately,
+    ).toBe(true);
   });
 });
 
@@ -128,6 +140,16 @@ describe('promptsToSend', () => {
     const second = preset({ id: 'second', overrideOthers: true });
 
     expect(promptsToSend([alone, other, second])).toStrictEqual([alone, second]);
+  });
+
+  it('leaves immediate presets out even when previously ticked and overriding', () => {
+    const immediate = preset({ sendImmediately: true, overrideOthers: true });
+
+    expect(promptsToSend([immediate, other])).toStrictEqual([other]);
+    expect(overridingPrompts([immediate])).toStrictEqual([]);
+    expect(unusedPrompts([immediate, other], [])).toStrictEqual([other]);
+    expect(isPromptUsed({ ...immediate, sendOnce: true }, [immediate.id])).toBe(false);
+    expect(promptOverriddenBy(immediate, [alone])).toStrictEqual([]);
   });
 });
 

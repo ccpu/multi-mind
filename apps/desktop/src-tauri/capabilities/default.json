@@ -23,6 +23,7 @@
     "allow-get-guest-config",
     "allow-guest-sync",
     "allow-guest-set-visible",
+    "allow-guest-set-overlays",
     "allow-guest-navigate",
     "allow-guest-reload",
     "allow-guest-eval",

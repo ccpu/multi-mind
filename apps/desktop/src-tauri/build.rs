@@ -26,6 +26,7 @@ fn main() {
             "get_guest_config",
             "guest_sync",
             "guest_set_visible",
+            "guest_set_overlays",
             "guest_navigate",
             "guest_reload",
             "guest_eval",

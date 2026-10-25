@@ -23,6 +23,7 @@ import {
   guestOpenPopup,
   guestPopupMenu,
   guestReload,
+  guestSetOverlays,
   guestSetVisible,
   guestSync,
   guestUrl,
@@ -73,6 +74,7 @@ export const appApi = {
   guest: {
     sync: guestSync,
     setVisible: guestSetVisible,
+    setOverlays: guestSetOverlays,
     navigate: guestNavigate,
     reload: guestReload,
     run: guestEval,

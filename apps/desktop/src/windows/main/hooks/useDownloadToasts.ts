@@ -1,7 +1,8 @@
 import type { GuestDownloadEvent } from '@internal/multi-mind';
 import { appApi } from '@internal/tauri-api';
 import { toast } from '@pixpilot/shadcn-ui';
-import { useEffect } from 'react';
+import { createElement, useEffect } from 'react';
+import { DownloadCompleteToast } from '../components/downloads/DownloadCompleteToast';
 
 function fileName(event: GuestDownloadEvent): string {
   const source = event.path ?? event.url;
@@ -20,9 +21,21 @@ export function useDownloadToasts(): void {
         const name = fileName(event);
 
         if (event.state === 'started') {
-          toast.info({ title: 'Downloading', description: name });
+          toast.info({ title: 'Downloading', description: name }, { duration: 2000 });
         } else if (event.state === 'finished') {
-          toast.success({ title: 'Download complete', description: event.path ?? name });
+          const { path } = event;
+          if (path !== null && path !== '') {
+            toast.custom(
+              ({ dismiss }) =>
+                createElement(DownloadCompleteToast, { path, onDismiss: dismiss }),
+              { duration: 10000 },
+            );
+          } else {
+            toast.success(
+              { title: 'Download complete', description: name },
+              { duration: 10000 },
+            );
+          }
         } else {
           toast.error({ title: 'Download failed', description: name });
         }

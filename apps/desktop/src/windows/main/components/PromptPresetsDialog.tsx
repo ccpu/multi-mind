@@ -83,7 +83,8 @@ export function PromptPresetsDialog({
           <DialogTitle>Prompts</DialogTitle>
           <DialogDescription>
             Ready-made text to tick on above the prompt box. A ticked prompt is added
-            before or after whatever you type, as its own setting says.
+            before or after whatever you type. Presets set to send immediately have an
+            arrow that sends their text on its own.
           </DialogDescription>
         </DialogHeader>
 

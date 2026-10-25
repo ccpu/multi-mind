@@ -19,6 +19,7 @@ function preset(overrides: Partial<PromptPreset> = {}): PromptPreset {
     name: 'English',
     value: 'Answer in English.',
     location: 'end',
+    sendImmediately: false,
     sendOnce: false,
     untickOnNewChat: false,
     overrideOthers: false,
@@ -308,6 +309,7 @@ describe('promptPanel', () => {
           name: 'English',
           value: 'Answer in French.',
           location: 'end',
+          sendImmediately: false,
           sendOnce: false,
           untickOnNewChat: false,
           overrideOthers: false,
@@ -330,6 +332,51 @@ describe('promptPanel', () => {
           expect.objectContaining({ location: 'start' }),
         );
       });
+    });
+
+    it('disables irrelevant settings while immediate sending is enabled', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({ presets });
+
+      await user.click(screen.getByRole('button', { name: 'English' }));
+      await user.click(screen.getByRole('switch', { name: 'Send immediately' }));
+
+      for (const name of [
+        'Use once per chat',
+        'Untick on New Chat',
+        'Override other prompts',
+      ]) {
+        expect(screen.getByRole('switch', { name })).toBeDisabled();
+      }
+      expect(screen.getByRole('combobox')).toBeDisabled();
+      await waitFor(() => {
+        expect(props.onChangePreset).toHaveBeenCalledWith(
+          'english',
+          expect.objectContaining({ sendImmediately: true }),
+        );
+      });
+
+      await user.click(screen.getByRole('switch', { name: 'Send immediately' }));
+      expect(screen.getByRole('switch', { name: 'Use once per chat' })).toBeEnabled();
+      expect(screen.getByRole('combobox')).toBeEnabled();
+    });
+
+    it('replaces the checkbox with a send arrow in the badge and manager', async () => {
+      const user = userEvent.setup();
+      const { props } = renderPanel({
+        presets: [preset({ sendImmediately: true })],
+        presetsDialogOpen: true,
+      });
+
+      expect(
+        screen.queryByRole('checkbox', { name: 'Use English' }),
+      ).not.toBeInTheDocument();
+      const manager = screen.getByRole('dialog');
+      await user.click(within(manager).getByRole('button', { name: 'Send English now' }));
+      expect(props.onTogglePreset).toHaveBeenCalledWith('english');
+      expect(
+        screen.getAllByRole('button', { name: 'Send English now', hidden: true }),
+      ).toHaveLength(2);
     });
 
     it('sets a preset to go out once per chat from the badge editor', async () => {

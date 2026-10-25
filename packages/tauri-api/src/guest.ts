@@ -58,6 +58,14 @@ export async function guestSetVisible(visible: boolean): Promise<void> {
   return invoke<void>('guest_set_visible', { visible });
 }
 
+/** Clips native browser regions behind floating UI; false requests the platform fallback. */
+export async function guestSetOverlays(
+  overlays: readonly GuestBounds[],
+  modal: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('guest_set_overlays', { overlays, modal });
+}
+
 /** Port of `WebViewManager.Reload`: back to the site's configured URL. */
 export async function guestNavigate(websiteId: string, url: string): Promise<void> {
   cancelGuestPrompt(websiteId);

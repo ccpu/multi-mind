@@ -5,6 +5,7 @@ import type {
 } from '@internal/multi-mind';
 import type { GuestPane, SearchEntry } from '@internal/tauri-api';
 import {
+  createPromptPreset,
   DEFAULT_SETTINGS,
   DEFAULT_WEBSITES,
   OPEN_MESSAGE_PREFIX,
@@ -67,6 +68,7 @@ vi.mock('@internal/tauri-api', () => ({
     guest: {
       sync: async (panes: readonly GuestPane[]) => guestSync(panes),
       setVisible: async () => undefined,
+      setOverlays: async () => true,
       run: vi.fn(async () => undefined),
       sendPrompt: async (websiteId: string, request: BrowserPromptRequest) =>
         guestSendPrompt(websiteId, request),
@@ -388,6 +390,84 @@ describe('main window', () => {
    * A ticked preset is a prompt of its own: the box being empty used to stop
    * the send outright, which left a preset-only prompt with no way out.
    */
+  it.each(['', 'Unfinished draft'])(
+    'sends an immediate preset alone with textbox content %j',
+    async (draft) => {
+      const user = userEvent.setup();
+      settingsGet.mockResolvedValue(
+        stub({
+          promptEditor: 'plain',
+          activeWebsites: ['claude', 'chatgpt'],
+          prompts: [
+            createPromptPreset({
+              name: 'Quick',
+              value: 'Quick prompt',
+              sendImmediately: true,
+              sendOnce: true,
+              overrideOthers: true,
+            }),
+            {
+              ...createPromptPreset({ value: 'Other preset', overrideOthers: true }),
+              id: 'other',
+            },
+          ],
+          activePrompts: ['other'],
+        }),
+      );
+      render(<App />);
+      await waitForPanes();
+      const textbox = screen.getByPlaceholderText(/Ask every enabled model/u);
+      if (draft !== '') {
+        await user.type(textbox, draft);
+      }
+
+      await user.click(screen.getByRole('button', { name: 'Send Quick now' }));
+      await user.click(screen.getByRole('button', { name: 'Send Quick now' }));
+
+      expect(guestSendPrompt).toHaveBeenCalledTimes(4);
+      expect(new Set(guestSendPrompt.mock.calls.map(([id]) => id))).toStrictEqual(
+        new Set(['claude', 'chatgpt']),
+      );
+      for (const [, request] of guestSendPrompt.mock.calls) {
+        expect(request.prompt).toBe('Quick prompt');
+      }
+      expect(textbox).toHaveValue(draft);
+      expect(settingsSave).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not include a previously ticked immediate preset on normal submit', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({
+        promptEditor: 'plain',
+        activeWebsites: ['claude'],
+        prompts: [
+          {
+            ...createPromptPreset({
+              name: 'Quick',
+              value: 'Quick prompt',
+              sendImmediately: true,
+              overrideOthers: true,
+            }),
+            id: 'quick',
+          },
+        ],
+        activePrompts: ['quick'],
+      }),
+    );
+    render(<App />);
+    await waitForPanes();
+    await user.type(
+      screen.getByPlaceholderText(/Ask every enabled model/u),
+      'Typed prompt',
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    expect(guestSendPrompt).toHaveBeenCalledTimes(1);
+    expect(guestSendPrompt.mock.calls[0]?.[1].prompt).toBe('Typed prompt');
+  });
+
   it('sends the ticked presets on their own when the box is empty', async () => {
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
@@ -400,6 +480,7 @@ describe('main window', () => {
             name: 'Terse',
             value: 'Be terse.',
             location: 'start',
+            sendImmediately: false,
             sendOnce: false,
             untickOnNewChat: false,
             overrideOthers: false,
@@ -432,6 +513,7 @@ describe('main window', () => {
             name: 'Terse',
             value: 'Be terse.',
             location: 'start',
+            sendImmediately: false,
             sendOnce: true,
             untickOnNewChat: false,
             overrideOthers: false,
@@ -487,6 +569,7 @@ describe('main window', () => {
             name: 'Terse',
             value: 'Be terse.',
             location: 'start',
+            sendImmediately: false,
             sendOnce: true,
             untickOnNewChat: false,
             overrideOthers: false,
@@ -517,6 +600,7 @@ describe('main window', () => {
     const user = userEvent.setup();
     const preset = {
       location: 'end',
+      sendImmediately: false,
       sendOnce: false,
       untickOnNewChat: false,
     } as const;
@@ -530,6 +614,7 @@ describe('main window', () => {
             id: 'terse',
             name: 'Terse',
             value: 'Be terse.',
+            sendImmediately: false,
             sendOnce: true,
             overrideOthers: false,
           },
@@ -569,6 +654,7 @@ describe('main window', () => {
           name: 'Chat only',
           value: 'For this chat.',
           location: 'end',
+          sendImmediately: false,
           sendOnce: true,
           untickOnNewChat: true,
           overrideOthers: true,
@@ -578,6 +664,7 @@ describe('main window', () => {
           name: 'Kept',
           value: 'Keep using this.',
           location: 'end',
+          sendImmediately: false,
           sendOnce: true,
           untickOnNewChat: false,
           overrideOthers: false,
@@ -614,6 +701,7 @@ describe('main window', () => {
       name: '',
       value: '',
       location: 'end',
+      sendImmediately: false,
       sendOnce: false,
       overrideOthers: false,
     } as const;
@@ -805,6 +893,7 @@ describe('main window', () => {
             name: 'Terse',
             value: 'Be terse.',
             location: 'start',
+            sendImmediately: false,
             sendOnce: false,
             untickOnNewChat: false,
             overrideOthers: false,
@@ -849,6 +938,7 @@ describe('main window', () => {
             name: 'Terse',
             value: 'Be terse.',
             location: 'start',
+            sendImmediately: false,
             sendOnce: false,
             untickOnNewChat: false,
             overrideOthers: false,

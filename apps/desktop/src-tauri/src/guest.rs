@@ -289,7 +289,7 @@ fn is_guest_label(label: &str) -> bool {
 
 /// Whether a label names a browser belonging to one particular window, which
 /// is what keeps one window's layout pass from closing another's panes.
-fn is_guest_of(label: &str, window_label: &str) -> bool {
+pub(crate) fn is_guest_of(label: &str, window_label: &str) -> bool {
     matches!(split_guest_label(label), Some((window, _)) if window == window_label)
 }
 
@@ -698,6 +698,7 @@ pub async fn guest_sync(
         if let Some(webview) = app.get_webview(&label) {
             webview.set_position(position).map_err(stringify)?;
             webview.set_size(size).map_err(stringify)?;
+            crate::browser_overlays::apply(&webview, &window)?;
             continue;
         }
 
@@ -780,6 +781,7 @@ pub async fn guest_sync(
         if !visible {
             let _ = webview.hide();
         }
+        crate::browser_overlays::apply(&webview, &window)?;
 
         opened_or_closed = true;
     }

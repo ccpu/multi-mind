@@ -33,6 +33,7 @@ interface PresetSwitchProps {
   label: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
 }
 
@@ -41,15 +42,24 @@ function PresetSwitch({
   label,
   description,
   checked,
+  disabled = false,
   onCheckedChange,
 }: PresetSwitchProps) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div
+      className="flex items-center justify-between gap-4 data-[disabled=true]:opacity-50"
+      data-disabled={disabled}
+    >
       <div className="flex flex-col gap-1">
         <Label htmlFor={id}>{label}</Label>
         <span className="text-xs text-muted-foreground">{description}</span>
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
     </div>
   );
 }
@@ -66,6 +76,7 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
     name: preset.name,
     value: preset.value,
     location: preset.location,
+    sendImmediately: preset.sendImmediately,
     sendOnce: preset.sendOnce,
     untickOnNewChat: preset.untickOnNewChat,
     overrideOthers: preset.overrideOthers,
@@ -117,6 +128,11 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
 
   const handleChangeSendOnce = useCallback(
     (checked: boolean) => updateDraft({ sendOnce: checked }),
+    [updateDraft],
+  );
+
+  const handleChangeSendImmediately = useCallback(
+    (checked: boolean) => updateDraft({ sendImmediately: checked }),
     [updateDraft],
   );
 
@@ -179,15 +195,25 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
           contentProps={LOCATION_CONTENT_PROPS}
           options={LOCATION_SELECT_OPTIONS}
           value={draft.location}
+          disabled={draft.sendImmediately}
           onChange={handleChangeLocation}
         />
       </div>
+
+      <PresetSwitch
+        id={`${preset.id}-send-immediately`}
+        label="Send immediately"
+        description="Click the arrow to send only this preset to enabled pages. Your textbox content is kept."
+        checked={draft.sendImmediately}
+        onCheckedChange={handleChangeSendImmediately}
+      />
 
       <PresetSwitch
         id={`${preset.id}-send-once`}
         label="Use once per chat"
         description="Goes out with the next message only, then stays ticked but greyed out until New Chat or a new window. Click ↻ on it to send it once more in this chat."
         checked={draft.sendOnce}
+        disabled={draft.sendImmediately}
         onCheckedChange={handleChangeSendOnce}
       />
 
@@ -196,6 +222,7 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
         label="Untick on New Chat"
         description="Stays ticked for this chat only. New Chat, a new window, or launching the app unticks it; tick it again to use it in the next chat."
         checked={draft.untickOnNewChat}
+        disabled={draft.sendImmediately}
         onCheckedChange={handleChangeUntickOnNewChat}
       />
 
@@ -204,6 +231,7 @@ export function PromptPresetForm({ preset, onChange, onRemove }: PromptPresetFor
         label="Override other prompts"
         description="While this is ticked, it is the only prompt added. The other ticked prompts are greyed out and left out until you untick it."
         checked={draft.overrideOthers}
+        disabled={draft.sendImmediately}
         onCheckedChange={handleChangeOverrideOthers}
       />
 

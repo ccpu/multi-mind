@@ -5,8 +5,7 @@ import { createId } from './ids';
  * house style, an output format, a language to answer in. The WinForms build
  * had nothing like it; every prompt was typed from scratch.
  *
- * A preset is not a prompt of its own: it wraps whatever was typed, in front
- * of it or behind it, and the sites only ever see the two joined together.
+ * Presets wrap the typed prompt, or send their own text immediately when clicked.
  */
 export type PromptLocation = 'end' | 'start';
 
@@ -28,6 +27,8 @@ export interface PromptPreset {
   readonly value: string;
   /** Which side of the typed prompt {@link value} goes on. */
   readonly location: PromptLocation;
+  /** Sends only this preset on click instead of joining the typed prompt. */
+  readonly sendImmediately: boolean;
   /**
    * Whether the preset goes out with one message per chat. It stays ticked,
    * but is left out once it has been sent, until **New Chat**, a new window,
@@ -55,6 +56,7 @@ export const BLANK_PROMPT_PRESET: PromptPresetDraft = {
   name: '',
   value: '',
   location: 'end',
+  sendImmediately: false,
   sendOnce: false,
   untickOnNewChat: false,
   overrideOthers: false,
@@ -92,6 +94,10 @@ export function normalizePromptPreset(value: unknown): PromptPreset | null {
     location: isPromptLocation(source.location)
       ? source.location
       : BLANK_PROMPT_PRESET.location,
+    sendImmediately:
+      typeof source.sendImmediately === 'boolean'
+        ? source.sendImmediately
+        : BLANK_PROMPT_PRESET.sendImmediately,
     sendOnce:
       typeof source.sendOnce === 'boolean'
         ? source.sendOnce
@@ -136,7 +142,7 @@ export function isPromptUsed(
   preset: PromptPreset,
   usedPrompts: readonly string[],
 ): boolean {
-  return preset.sendOnce && usedPrompts.includes(preset.id);
+  return !preset.sendImmediately && preset.sendOnce && usedPrompts.includes(preset.id);
 }
 
 /** The ticked presets still to go out in this chat. */
@@ -144,12 +150,14 @@ export function unusedPrompts(
   ticked: readonly PromptPreset[],
   usedPrompts: readonly string[],
 ): PromptPreset[] {
-  return ticked.filter((preset) => !isPromptUsed(preset, usedPrompts));
+  return ticked.filter(
+    (preset) => !preset.sendImmediately && !isPromptUsed(preset, usedPrompts),
+  );
 }
 
 /** The ticked presets that leave the rest out. */
 export function overridingPrompts(ticked: readonly PromptPreset[]): PromptPreset[] {
-  return ticked.filter((preset) => preset.overrideOthers);
+  return ticked.filter((preset) => !preset.sendImmediately && preset.overrideOthers);
 }
 
 /**
@@ -160,7 +168,9 @@ export function overridingPrompts(ticked: readonly PromptPreset[]): PromptPreset
 export function promptsToSend(ticked: readonly PromptPreset[]): PromptPreset[] {
   const overriding = overridingPrompts(ticked);
 
-  return overriding.length > 0 ? overriding : [...ticked];
+  return overriding.length > 0
+    ? overriding
+    : ticked.filter((preset) => !preset.sendImmediately);
 }
 
 /**
@@ -171,7 +181,9 @@ export function promptOverriddenBy(
   preset: PromptPreset,
   overriding: readonly PromptPreset[],
 ): PromptPreset[] {
-  return overriding.some((entry) => entry.id === preset.id) ? [] : [...overriding];
+  return preset.sendImmediately || overriding.some((entry) => entry.id === preset.id)
+    ? []
+    : [...overriding];
 }
 
 /**

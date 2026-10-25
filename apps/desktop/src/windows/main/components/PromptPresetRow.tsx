@@ -2,7 +2,7 @@ import type { PromptPreset, PromptPresetDraft } from '@internal/multi-mind';
 import { PROMPT_LOCATION_OPTIONS, promptPresetLabel } from '@internal/multi-mind';
 import { Checkbox, cn } from '@pixpilot/shadcn';
 import { Button } from '@pixpilot/shadcn-ui';
-import { ChevronRight, RotateCcw } from 'lucide-react';
+import { ChevronRight, RotateCcw, SendHorizontal } from 'lucide-react';
 import { useCallback } from 'react';
 import { OverriddenTooltip } from './OverriddenTooltip';
 import { PromptPresetForm } from './PromptPresetForm';
@@ -72,12 +72,26 @@ export function PromptPresetRow({
             overriddenBy.length > 0 && 'opacity-50',
           )}
         >
-          <Checkbox
-            className={cn(dimUsed && 'opacity-50')}
-            checked={checked}
-            aria-label={`Use ${label}`}
-            onCheckedChange={handleToggle}
-          />
+          {preset.sendImmediately ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-4 p-0 [&_svg]:size-4"
+              aria-label={`Send ${label} now`}
+              title={`Send ${label} to enabled pages`}
+              onClick={handleToggle}
+            >
+              <SendHorizontal className="-rotate-90" />
+            </Button>
+          ) : (
+            <Checkbox
+              className={cn(dimUsed && 'opacity-50')}
+              checked={checked}
+              aria-label={`Use ${label}`}
+              onCheckedChange={handleToggle}
+            />
+          )}
 
           <button
             type="button"
