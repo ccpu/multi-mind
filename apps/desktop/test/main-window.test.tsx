@@ -1,4 +1,8 @@
-import type { AppSettings, GuestMessageEvent } from '@internal/multi-mind';
+import type {
+  AppSettings,
+  BrowserPromptRequest,
+  GuestMessageEvent,
+} from '@internal/multi-mind';
 import type { GuestPane, SearchEntry } from '@internal/tauri-api';
 import {
   DEFAULT_SETTINGS,
@@ -16,7 +20,8 @@ const settingsGet = vi.fn<() => Promise<AppSettings>>();
 const settingsSave = vi.fn<(patch: Partial<AppSettings>) => Promise<AppSettings>>();
 const newWindow = vi.fn<() => Promise<{ success: boolean; message: string }>>();
 const guestSync = vi.fn<(panes: readonly GuestPane[]) => Promise<void>>();
-const guestRun = vi.fn<(websiteId: string, script: string) => Promise<void>>();
+const guestSendPrompt =
+  vi.fn<(websiteId: string, request: BrowserPromptRequest) => Promise<void>>();
 const guestNavigate = vi.fn<(websiteId: string, url: string) => Promise<void>>();
 const searchAddPrompt = vi.fn<(prompt: string) => Promise<number>>();
 const searchAddConversation =
@@ -40,7 +45,7 @@ vi.mock('@internal/tauri-api', () => ({
         isDefault: true,
       }),
       newWindow: async () => newWindow(),
-      getGuestConfig: async () => ({ bridgeKey: '_bridge', findKey: '_find' }),
+      getGuestConfig: async () => ({ bridgeKey: '_bridge' }),
       searchAddPrompt: async (prompt: string) => searchAddPrompt(prompt),
       searchAddConversation: async (promptId: number, websiteId: string) =>
         searchAddConversation(promptId, websiteId),
@@ -62,7 +67,10 @@ vi.mock('@internal/tauri-api', () => ({
     guest: {
       sync: async (panes: readonly GuestPane[]) => guestSync(panes),
       setVisible: async () => undefined,
-      run: async (websiteId: string, script: string) => guestRun(websiteId, script),
+      run: vi.fn(async () => undefined),
+      sendPrompt: async (websiteId: string, request: BrowserPromptRequest) =>
+        guestSendPrompt(websiteId, request),
+      cancelPrompt: vi.fn(),
       navigate: async (websiteId: string, url: string) => guestNavigate(websiteId, url),
       reload: async () => undefined,
       url: async () => 'https://claude.ai/new',
@@ -108,7 +116,7 @@ beforeEach(() => {
     message: 'Window "main-2" opened successfully.',
   });
   guestSync.mockResolvedValue(undefined);
-  guestRun.mockResolvedValue(undefined);
+  guestSendPrompt.mockResolvedValue(undefined);
   guestNavigate.mockResolvedValue(undefined);
   searchAddPrompt.mockResolvedValue(1);
   searchAddConversation.mockResolvedValue(1);
@@ -293,10 +301,9 @@ describe('main window', () => {
       'hello',
     );
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    await waitFor(() => expect(guestRun).toHaveBeenCalled());
+    await waitFor(() => expect(guestSendPrompt).toHaveBeenCalled());
 
-    const script = guestRun.mock.calls[0]?.[1] ?? '';
-    const attemptId = script.match(/attemptId: "(?<id>[^"]+)"/u)?.groups?.['id'];
+    const attemptId = guestSendPrompt.mock.calls[0]?.[1].attemptId;
     expect(attemptId).toBeDefined();
     guestListeners.forEach((listener) =>
       listener({
@@ -330,9 +337,8 @@ describe('main window', () => {
         'hello',
       );
       await user.click(screen.getByRole('button', { name: 'Submit' }));
-      await waitFor(() => expect(guestRun).toHaveBeenCalled());
-      const script = guestRun.mock.calls[0]?.[1] ?? '';
-      const attemptId = script.match(/attemptId: "(?<id>[^"]+)"/u)?.groups?.['id'];
+      await waitFor(() => expect(guestSendPrompt).toHaveBeenCalled());
+      const attemptId = guestSendPrompt.mock.calls[0]?.[1].attemptId;
       expect(attemptId).toBeDefined();
       for (const status of ['observing', 'generating', 'completed', 'completed']) {
         guestListeners.forEach((listener) =>
@@ -372,10 +378,10 @@ describe('main window', () => {
     );
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(1);
+      expect(guestSendPrompt).toHaveBeenCalledTimes(1);
     });
-    expect(guestRun.mock.calls[0]?.[0]).toBe('claude');
-    expect(guestRun.mock.calls[0]?.[1]).toContain('hello');
+    expect(guestSendPrompt.mock.calls[0]?.[0]).toBe('claude');
+    expect(guestSendPrompt.mock.calls[0]?.[1].prompt).toContain('hello');
   });
 
   /*
@@ -408,10 +414,10 @@ describe('main window', () => {
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(1);
+      expect(guestSendPrompt).toHaveBeenCalledTimes(1);
     });
-    expect(guestRun.mock.calls[0]?.[0]).toBe('claude');
-    expect(guestRun.mock.calls[0]?.[1]).toContain('Be terse.');
+    expect(guestSendPrompt.mock.calls[0]?.[0]).toBe('claude');
+    expect(guestSendPrompt.mock.calls[0]?.[1].prompt).toContain('Be terse.');
   });
 
   it('sends a use-once preset once per chat, keeping it ticked, until sent again or New Chat', async () => {
@@ -457,9 +463,9 @@ describe('main window', () => {
     await submit('fifth');
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(5);
+      expect(guestSendPrompt).toHaveBeenCalledTimes(5);
     });
-    const scripts = guestRun.mock.calls.map((call) => String(call[1]));
+    const scripts = guestSendPrompt.mock.calls.map((call) => call[1].prompt);
     expect(scripts.map((script) => script.includes('Be terse.'))).toStrictEqual([
       true,
       false,
@@ -502,9 +508,9 @@ describe('main window', () => {
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(2);
+      expect(guestSendPrompt).toHaveBeenCalledTimes(2);
     });
-    expect(String(guestRun.mock.calls[1]?.[1])).toContain('Be terse.');
+    expect(guestSendPrompt.mock.calls[1]?.[1].prompt ?? '').toContain('Be terse.');
   });
 
   it('sends only the overriding preset while it is ticked', async () => {
@@ -545,9 +551,9 @@ describe('main window', () => {
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => {
-      expect(guestRun).toHaveBeenCalledTimes(1);
+      expect(guestSendPrompt).toHaveBeenCalledTimes(1);
     });
-    const script = String(guestRun.mock.calls[0]?.[1]);
+    const script = guestSendPrompt.mock.calls[0]?.[1].prompt ?? '';
     expect(script).toContain('Answer as JSON.');
     expect(script).not.toContain('Be terse.');
     expect(screen.getByRole('checkbox', { name: 'Use Terse' })).toBeChecked();
@@ -780,7 +786,7 @@ describe('main window', () => {
 
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    expect(guestRun).not.toHaveBeenCalled();
+    expect(guestSendPrompt).not.toHaveBeenCalled();
   });
 
   /*
@@ -890,7 +896,8 @@ describe('main window', () => {
 
       expect(panes.map((pane) => pane.websiteId)).toStrictEqual(['claude', 'chatgpt']);
       expect(panes[0]?.url).toBe('https://claude.ai/new');
-      expect(panes[0]?.scripts.join('\n')).toContain('_find');
+      expect(panes[0]?.scripts).toHaveLength(2);
+      expect(panes[0]?.scripts.join('\n')).not.toContain('_find');
     });
 
     it('sends nothing at all while no site is open', async () => {

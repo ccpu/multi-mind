@@ -7,6 +7,7 @@
 //! backend can do — keep the settings file, own the embedded browsers, draw a
 //! native menu over one, and look for a new release.
 
+mod browser_automation;
 mod commands;
 mod guest;
 mod identity;
@@ -56,6 +57,7 @@ pub fn run() {
             guest::guest_navigate,
             guest::guest_reload,
             guest::guest_eval,
+            browser_automation::guest_automation,
             guest::guest_url,
             guest::guest_cookies,
             guest::guest_delete_cookies,
@@ -130,6 +132,7 @@ pub fn run() {
             app.manage(guest::BrowserArguments::from_settings(&saved_settings));
             app.manage(guest::GuestHost::new(guest::profile_directory(&handle)));
             app.manage(menu::PendingMenu::default());
+            app.manage(browser_automation::BrowserAutomation::default());
 
             let memory_handle = handle.clone();
             handle.listen(settings::SETTINGS_CHANGED_EVENT, move |event| {

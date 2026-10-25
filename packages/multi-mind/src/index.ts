@@ -1,3 +1,6 @@
+export * from './browser-automation/run-browser-action';
+export * from './browser-automation/send-browser-prompt';
+export * from './browser-automation/types';
 export * from './context-menu';
 export * from './guest-windows';
 export * from './history-manager';

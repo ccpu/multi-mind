@@ -7,6 +7,10 @@ import type {
   NativeMenuEntry,
 } from './types';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  cancelGuestPrompt,
+  retainGuestPrompts,
+} from './browser-automation/send-guest-prompt';
 
 /**
  * The embedded browsers.
@@ -37,6 +41,7 @@ export async function guestConfig(): Promise<GuestConfig> {
  * picture is what keeps them from racing.
  */
 export async function guestSync(panes: readonly GuestPane[]): Promise<void> {
+  retainGuestPrompts(new Set(panes.map((pane) => pane.websiteId)));
   return invoke<void>('guest_sync', { panes });
 }
 
@@ -55,15 +60,17 @@ export async function guestSetVisible(visible: boolean): Promise<void> {
 
 /** Port of `WebViewManager.Reload`: back to the site's configured URL. */
 export async function guestNavigate(websiteId: string, url: string): Promise<void> {
+  cancelGuestPrompt(websiteId);
   return invoke<void>('guest_navigate', { websiteId, url });
 }
 
 /** Reloads the page a guest is on, which is what the right-click menu does. */
 export async function guestReload(websiteId: string): Promise<void> {
+  cancelGuestPrompt(websiteId);
   return invoke<void>('guest_reload', { websiteId });
 }
 
-/** Runs a script in one guest — the prompt runner, or a menu action. */
+/** Runs an explicit context-menu action; prompt automation uses structured requests. */
 export async function guestEval(websiteId: string, script: string): Promise<void> {
   return invoke<void>('guest_eval', { websiteId, script });
 }
@@ -103,8 +110,8 @@ export async function guestOpenDevtools(websiteId: string): Promise<void> {
  * given it — sharing the profile so the session a sign-in authorises is the
  * one the panes are signed in to.
  *
- * The window gets no bridge and no capability, so `scripts` are only what the
- * page does for itself; `createPopupScripts` is what belongs here.
+ * The window gets no app bridge or capability. The legacy scripts argument is
+ * accepted for compatibility and ignored; native callbacks handle popup links.
  */
 export async function guestOpenPopup(url: string, scripts: string[]): Promise<void> {
   return invoke<void>('guest_open_popup', { url, scripts });

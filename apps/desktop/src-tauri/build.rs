@@ -29,6 +29,7 @@ fn main() {
             "guest_navigate",
             "guest_reload",
             "guest_eval",
+            "guest_automation",
             "guest_url",
             "guest_cookies",
             "guest_delete_cookies",

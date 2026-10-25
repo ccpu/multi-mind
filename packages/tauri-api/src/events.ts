@@ -10,6 +10,7 @@ import {
   normalizeSettings,
 } from '@internal/multi-mind';
 import { listen } from '@tauri-apps/api/event';
+import { onLocalGuestMessage } from './browser-automation/guest-message-bus';
 
 /** Broadcast after the settings file changes, whoever changed it. */
 export const SETTINGS_CHANGED_EVENT = 'multi-mind://settings-changed';
@@ -58,13 +59,16 @@ export function onSettingsChanged(handler: (settings: AppSettings) => void): () 
 }
 
 /**
- * A message from an embedded site: a click, a Ctrl+Enter, a window it wants
- * opened, or a right-click. The Electron port took these as a `<webview>`
- * `ipc-message`; here they come through the `guest_message` command and back
- * out as an app event, which is the only thing a guest is allowed to call.
+ * Combines the two guest UI reporters, native browser lifecycle events and
+ * host-generated automation evidence into one window-scoped subscription.
  */
 export function onGuestMessage(handler: (event: GuestMessageEvent) => void): () => void {
-  return subscribe<GuestMessageEvent>(GUEST_MESSAGE_EVENT, handler);
+  const stopLocal = onLocalGuestMessage(handler);
+  const stopNative = subscribe<GuestMessageEvent>(GUEST_MESSAGE_EVENT, handler);
+  return () => {
+    stopLocal();
+    stopNative();
+  };
 }
 
 /** A download an embedded site started, finished or failed. */

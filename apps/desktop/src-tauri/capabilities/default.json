@@ -26,6 +26,7 @@
     "allow-guest-navigate",
     "allow-guest-reload",
     "allow-guest-eval",
+    "allow-guest-automation",
     "allow-guest-url",
     "allow-guest-cookies",
     "allow-guest-delete-cookies",

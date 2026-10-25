@@ -35,6 +35,8 @@ Installers for macOS, Windows and Linux are attached to each
 [release](https://github.com/ccpu/multi-mind/releases), and the app updates
 itself unless you turn that off.
 
+**Platform testing:** Tested on Windows. macOS and Linux have not been tested.
+
 ## 🚀 Getting started
 
 Prerequisites: Node (see [.node-version](.node-version)), pnpm, and the

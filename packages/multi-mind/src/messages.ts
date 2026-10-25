@@ -5,18 +5,13 @@
  * guest as an initialization script and forwards whatever it is given to the
  * host window.
  *
- * Both of the globals it defines live on the embedded page's own `window`,
- * where any site can enumerate them. Fixed names would announce to every AI
- * site exactly which app is embedding it — and could be blocklisted by name —
- * so they are generated fresh each run and handed to the bridge and the
- * injected scripts at startup. Nothing outside this session can predict them.
+ * Only the message bridge remains on the page's window. Browser selection,
+ * submission state and response monitoring live in the host.
  */
 
 export interface GuestGlobals {
   /** Global the guest bridge is exposed under. */
   bridgeKey: string;
-  /** Global the shadow-root-aware query helper is attached to. */
-  findKey: string;
 }
 
 /**
@@ -39,7 +34,6 @@ function randomGlobalName(): string {
 export function createGuestGlobals(): GuestGlobals {
   return {
     bridgeKey: randomGlobalName(),
-    findKey: randomGlobalName(),
   };
 }
 
@@ -86,6 +80,8 @@ export function guestLabel(websiteId: string): string {
 }
 
 export const CLICKED_MESSAGE = '__clicked__';
+/** A user stopped generation or followed a link in the embedded page. */
+export const CANCEL_RESPONSE_MESSAGE = '__cancel_response__';
 export const CTRL_ENTER_MESSAGE = '__ctrl_enter__';
 
 /** Prefix of the message a guest sends when it wants to open a window. */

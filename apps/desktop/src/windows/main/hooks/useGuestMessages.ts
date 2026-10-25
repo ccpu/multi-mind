@@ -7,6 +7,7 @@ import type {
 } from '@internal/multi-mind';
 import type { GuestBounds } from '@internal/tauri-api';
 import {
+  CANCEL_RESPONSE_MESSAGE,
   CLICKED_MESSAGE,
   CTRL_ENTER_MESSAGE,
   decideGuestWindow,
@@ -40,11 +41,9 @@ export interface UseGuestMessagesOptions {
  * carrying whatever had been typed into the site's own compose box, and
  * mirrored it into the prompt box; that mirror has been removed.
  *
- * Two of the four kinds are new here, and neither is a new feature: Electron
- * answered a `window.open` and a right-click in its main process, and Tauri has
- * no hook for either, so the guest reports them and the window decides — with
- * the same functions, `decideGuestWindow` and `buildContextMenuModel`, that
- * decided them before.
+ * Popup and metadata events come from native browser callbacks. Page clicks
+ * and the custom context menu use the two retained guest listeners; response
+ * reports come from the shared host automation workflow.
  */
 export function useGuestMessages({
   boundsOf,
@@ -90,6 +89,10 @@ export function useGuestMessages({
 
   const handleMessage = useCallback(
     ({ websiteId, message }: { websiteId: string; message: string }) => {
+      if (message === CANCEL_RESPONSE_MESSAGE) {
+        appApi.guest.cancelPrompt(websiteId);
+        return;
+      }
       if (message.startsWith(RESPONSE_MESSAGE_PREFIX)) {
         const report = parseResponseReport(message);
         if (report !== null) {

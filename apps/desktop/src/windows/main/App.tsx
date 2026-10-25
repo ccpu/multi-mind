@@ -4,7 +4,6 @@ import type { PromptEditorHandle } from './types/prompt-editor';
 import {
   composePrompt,
   createId,
-  createRunPromptScript,
   getActivePrompts,
   getActiveWebsites,
   getBottomPanelPercent,
@@ -247,10 +246,7 @@ function App() {
         beginResponse(website, attemptId);
         dismissPromptError(website.id);
         appApi.guest
-          .run(
-            website.id,
-            createRunPromptScript(website, composed, guestGlobals, attemptId),
-          )
+          .sendPrompt(website.id, { website, prompt: composed, attemptId })
           .then(
             () => {
               savePrompt(website.id).catch((error: unknown) => {

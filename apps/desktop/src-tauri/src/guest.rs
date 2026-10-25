@@ -298,7 +298,6 @@ fn is_guest_of(label: &str, window_label: &str) -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct GuestGlobals {
     pub bridge_key: String,
-    pub find_key: String,
 }
 
 /// Mirror of `GuestBounds`, in CSS pixels inside the window.
@@ -425,7 +424,6 @@ impl GuestHost {
         Self {
             globals: GuestGlobals {
                 bridge_key: random_global_name(),
-                find_key: random_global_name(),
             },
             profile_directory,
             user_agent: identity::guest_user_agent(),
@@ -602,13 +600,32 @@ pub fn profile_directory<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
         .join(PROFILE_DIRECTORY)
 }
 
-fn webview_of<R: Runtime>(
+pub(crate) fn webview_of<R: Runtime>(
     app: &AppHandle<R>,
     window_label: &str,
     website_id: &str,
 ) -> Result<Webview<R>, String> {
     app.get_webview(&guest_label(window_label, website_id))
         .ok_or_else(|| format!("No embedded browser is open for \"{website_id}\"."))
+}
+
+fn report_page<R: Runtime>(webview: &Webview<R>, title: String) {
+    let Some((window_label, website_id)) = split_guest_label(webview.label()) else {
+        return;
+    };
+    let Ok(url) = webview.url() else {
+        return;
+    };
+    let payload = GuestMessagePayload {
+        website_id: website_id.to_string(),
+        message: format!(
+            "__page__{}",
+            serde_json::json!({ "url": url.as_str(), "title": title })
+        ),
+    };
+    let _ = webview
+        .app_handle()
+        .emit_to(window_label, GUEST_MESSAGE_EVENT, payload);
 }
 
 #[tauri::command]
@@ -693,6 +710,28 @@ pub async fn guest_sync(
             // one is a sign-in in all of them.
             .data_directory(host.profile_directory.clone())
             .zoom_hotkeys_enabled(true);
+
+        // Browser lifecycle events replace the page's window.open override and timer.
+        {
+            let app = app.clone();
+            let window_label = window_label.clone();
+            let website_id = pane.website_id.clone();
+            builder = builder.on_new_window(move |url, _features| {
+                let payload = GuestMessagePayload {
+                    website_id: website_id.clone(),
+                    message: format!("__open__{}", serde_json::json!({ "url": url.as_str() })),
+                };
+                let _ = app.emit_to(&window_label, GUEST_MESSAGE_EVENT, payload);
+                tauri::webview::NewWindowResponse::Deny
+            });
+        }
+        builder = builder
+            .on_document_title_changed(|webview, title| report_page(&webview, title))
+            .on_page_load(|webview, payload| {
+                if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                    report_page(&webview, String::new());
+                }
+            });
 
         if let Some(user_agent) = &host.user_agent {
             builder = builder.user_agent(user_agent);
@@ -997,7 +1036,7 @@ pub async fn guest_reload(
         .map_err(stringify)
 }
 
-/// Runs a script in one guest — the prompt runner, or a right-click action.
+/// Runs an explicit right-click action; prompt automation has its own typed command.
 #[tauri::command]
 pub async fn guest_eval(
     app: AppHandle,
@@ -1105,7 +1144,7 @@ pub async fn guest_open_devtools(
 /// pane in every window is signed in to, which is the whole reason none of
 /// this is handed to the system browser. It gets no capability of its own, so
 /// the page in it can call nothing; `scripts` are therefore whatever the
-/// window wants the page to do for itself, with no bridge in front of them.
+/// legacy caller data, ignored now that native callbacks handle popup links.
 #[tauri::command]
 pub async fn guest_open_popup(
     app: AppHandle,
@@ -1117,19 +1156,25 @@ pub async fn guest_open_popup(
 
     let label = host.next_popup_label();
 
-    let mut builder = tauri::WebviewWindowBuilder::new(&app, label, WebviewUrl::External(parsed))
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
         .title("Multi Mind")
         .inner_size(600.0, 720.0)
         .data_directory(host.profile_directory.clone())
         .zoom_hotkeys_enabled(true)
         .center();
 
-    if !scripts.is_empty() {
-        builder = builder.initialization_script(scripts.join(
-            "
-",
-        ));
-    }
+    // Popups need no page scripts; a native callback handles nested window requests.
+    let _ = scripts;
+    let popup_app = app.clone();
+    let popup_label = label.clone();
+    builder = builder.on_new_window(move |url, _features| {
+        if matches!(url.scheme(), "http" | "https") {
+            if let Some(window) = popup_app.get_webview_window(&popup_label) {
+                let _ = window.navigate(url);
+            }
+        }
+        tauri::webview::NewWindowResponse::Deny
+    });
 
     if let Some(user_agent) = &host.user_agent {
         builder = builder.user_agent(user_agent);

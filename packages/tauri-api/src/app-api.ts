@@ -1,4 +1,8 @@
 import {
+  cancelGuestPrompt,
+  sendGuestPrompt,
+} from './browser-automation/send-guest-prompt';
+import {
   appInfo,
   browseSettingsLocation,
   getSettings,
@@ -72,6 +76,8 @@ export const appApi = {
     navigate: guestNavigate,
     reload: guestReload,
     run: guestEval,
+    sendPrompt: sendGuestPrompt,
+    cancelPrompt: cancelGuestPrompt,
     url: guestUrl,
     cookies: guestCookies,
     deleteCookies: guestDeleteCookies,
