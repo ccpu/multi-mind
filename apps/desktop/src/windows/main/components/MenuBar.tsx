@@ -76,18 +76,17 @@ export function MenuBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="sm" onClick={onReload}>
-          <MessageCircle />
-          New Chat
+        <Button variant="ghost" size="sm" onClick={onNewWindow}>
+          <Copy />
+          New Window
         </Button>
-
         <Button variant="ghost" size="sm" onClick={onResetLayout}>
           <Columns3 />
           Reset Layout
         </Button>
-        <Button variant="ghost" size="sm" onClick={onNewWindow}>
-          <Copy />
-          New Window
+        <Button variant="ghost" size="sm" onClick={onReload}>
+          <MessageCircle />
+          New Chat
         </Button>
       </div>
 
