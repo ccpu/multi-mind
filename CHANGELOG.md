@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/ccpu/multi-mind/compare/v1.18.0...v1.18.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **response-completion:** ensure toasts only show in development mode ([fec0e0e](https://github.com/ccpu/multi-mind/commit/fec0e0ede0705a1a6d94b22df7b33b2da40d6691))
+
 # [1.18.0](https://github.com/ccpu/multi-mind/compare/v1.17.1...v1.18.0) (2026-10-25)
 
 
