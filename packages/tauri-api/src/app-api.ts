@@ -31,7 +31,9 @@ import {
 import {
   searchAddConversation,
   searchAddPrompt,
+  searchDeleteChat,
   searchPrompts,
+  searchUpdateChat,
   searchUpdateConversation,
 } from './search';
 
@@ -59,7 +61,9 @@ export const appApi = {
     newWindow,
     searchAddPrompt,
     searchAddConversation,
+    searchDeleteChat,
     searchUpdateConversation,
+    searchUpdateChat,
     searchPrompts,
   },
 

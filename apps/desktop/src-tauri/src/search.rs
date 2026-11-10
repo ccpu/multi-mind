@@ -11,7 +11,7 @@ use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
@@ -48,6 +48,8 @@ pub struct SearchEntry {
     id: i64,
     /// A page title captured on one of the chat's conversations, or empty.
     title: String,
+    custom_title: bool,
+    favorite: bool,
     /// The first prompt sent in the chat.
     prompt: String,
     /// A later prompt that matches the search better than the first one.
@@ -69,6 +71,8 @@ struct History {
     chats: Vec<Vec<usize>>,
     /// Each chat's title, by position in `chats`.
     titles: Vec<String>,
+    custom_titles: Vec<bool>,
+    favorites: Vec<bool>,
 }
 
 /// A prompt as copied between databases, without its row IDs.
@@ -76,6 +80,8 @@ struct StoredPrompt {
     prompt: String,
     created_at: String,
     conversations: Vec<StoredConversation>,
+    custom_title: Option<String>,
+    favorite: bool,
 }
 
 struct StoredConversation {
@@ -91,14 +97,29 @@ struct SearchDatabase {
     connection: Connection,
 }
 
-pub struct SearchStore(Mutex<SearchDatabase>);
+#[derive(Clone)]
+pub struct SearchStore(Arc<Mutex<SearchDatabase>>);
 
 impl SearchStore {
     pub fn open(directory: PathBuf) -> Result<Self, String> {
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let path = directory.join(DATABASE_FILE_NAME);
         let connection = connect(&path)?;
-        Ok(Self(Mutex::new(SearchDatabase { path, connection })))
+        Ok(Self(Arc::new(Mutex::new(SearchDatabase {
+            path,
+            connection,
+        }))))
+    }
+
+    /// Keeps SQLite work and waiting for its lock off the UI and async runtime threads.
+    async fn run<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce(Self) -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        let store = self.clone();
+        tauri::async_runtime::spawn_blocking(move || operation(store))
+            .await
+            .map_err(|error| error.to_string())?
     }
 
     /// Opens beside the active settings file, moving a database created by an
@@ -158,25 +179,29 @@ impl SearchStore {
 
     fn add_prompt(&self, prompt: &str) -> Result<i64, String> {
         let database = self.0.lock().map_err(|error| error.to_string())?;
+        let id = next_id(&database.connection, "prompts")?;
         database
             .connection
-            .execute("INSERT INTO prompts (prompt) VALUES (?1)", params![prompt])
+            .execute(
+                "INSERT INTO prompts (id, prompt) VALUES (?1, ?2)",
+                params![id, prompt],
+            )
             .map_err(|error| error.to_string())?;
-        Ok(database.connection.last_insert_rowid())
+        Ok(id)
     }
 
     /// Links a provider to a prompt, once per provider.
     fn add_conversation(&self, prompt_id: i64, website_id: &str) -> Result<i64, String> {
-        self.0
-            .lock()
-            .map_err(|error| error.to_string())?
+        let database = self.0.lock().map_err(|error| error.to_string())?;
+        let id = next_id(&database.connection, "conversations")?;
+        database
             .connection
             .query_row(
-                "INSERT INTO conversations (prompt_id, website_id) VALUES (?1, ?2)
+                "INSERT INTO conversations (id, prompt_id, website_id) VALUES (?1, ?2, ?3)
                  ON CONFLICT (prompt_id, website_id)
                  DO UPDATE SET updated_at = CURRENT_TIMESTAMP
                  RETURNING id",
-                params![prompt_id, website_id],
+                params![id, prompt_id, website_id],
                 |row| row.get(0),
             )
             .map_err(|error| error.to_string())
@@ -200,17 +225,109 @@ impl SearchStore {
         Ok(())
     }
 
+    /// Removes the entire grouped chat and its local metadata atomically.
+    fn delete_chat(&self, id: i64) -> Result<(), String> {
+        let mut database = self.0.lock().map_err(|error| error.to_string())?;
+        let history = load_history(&database.connection)?;
+        let chat = history
+            .chats
+            .iter()
+            .find(|chat| {
+                chat.iter()
+                    .any(|&position| history.prompts[position].0 == id)
+            })
+            .ok_or("Chat not found")?;
+        let transaction = database
+            .connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        for &position in chat {
+            transaction
+                .execute(
+                    "DELETE FROM prompts WHERE id = ?1",
+                    params![history.prompts[position].0],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        transaction.commit().map_err(|error| error.to_string())
+    }
+
     /// Every word must appear in one of a chat's prompts or in one of its
     /// conversation titles or URLs. Results are ranked by where the words were
     /// found, latest chat first within a rank; an empty query lists the most
     /// recent chats.
+    fn update_chat(
+        &self,
+        id: i64,
+        title: Option<String>,
+        favorite: Option<bool>,
+    ) -> Result<(), String> {
+        let mut database = self.0.lock().map_err(|error| error.to_string())?;
+        let history = load_history(&database.connection)?;
+        let chat = history
+            .chats
+            .iter()
+            .find(|chat| chat.iter().any(|&p| history.prompts[p].0 == id))
+            .ok_or("Chat not found")?;
+        let transaction = database
+            .connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        for &position in chat {
+            let prompt_id = history.prompts[position].0;
+            transaction
+                .execute(
+                    "INSERT INTO chat_metadata (prompt_id) VALUES (?1) ON CONFLICT DO NOTHING",
+                    params![prompt_id],
+                )
+                .map_err(|e| e.to_string())?;
+            if let Some(ref title) = title {
+                let title = title.trim();
+                if title.is_empty() {
+                    return Err("Title cannot be empty".into());
+                }
+                transaction
+                    .execute(
+                        "UPDATE chat_metadata SET custom_title = ?2 WHERE prompt_id = ?1",
+                        params![prompt_id, title],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            if let Some(favorite) = favorite {
+                transaction
+                    .execute(
+                        "UPDATE chat_metadata SET favorite = ?2 WHERE prompt_id = ?1",
+                        params![prompt_id, favorite],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        transaction.commit().map_err(|error| error.to_string())
+    }
+
+    #[cfg(test)]
     fn search(&self, query: &str) -> Result<Vec<SearchEntry>, String> {
+        self.search_options(query, false, false)
+    }
+
+    fn search_options(
+        &self,
+        query: &str,
+        all: bool,
+        favorites: bool,
+    ) -> Result<Vec<SearchEntry>, String> {
         let database = self.0.lock().map_err(|error| error.to_string())?;
         let connection = &database.connection;
         let history = load_history(connection)?;
         let terms = search_terms(query);
         if terms.is_empty() {
-            return (0..history.chats.len().min(RECENT_LIMIT))
+            return (0..history.chats.len())
+                .filter(|&index| !favorites || history.favorites[index])
+                .take(if all || favorites {
+                    usize::MAX
+                } else {
+                    RECENT_LIMIT
+                })
                 .map(|index| {
                     let first = history.prompts[history.chats[index][0]].0;
                     Ok(history.entry(index, prompt_text(connection, first)?, None))
@@ -236,14 +353,18 @@ impl SearchStore {
         let phrase = normalize(query);
         let mut ranked = Vec::new();
         for (index, chat) in history.chats.iter().enumerate() {
+            if favorites && !history.favorites[index] {
+                continue;
+            }
             let conversations = chat
                 .iter()
                 .flat_map(|&position| &history.conversations[position])
                 .collect::<Vec<_>>();
-            let titles = conversations
+            let mut titles = conversations
                 .iter()
                 .map(|conversation| conversation.title.to_lowercase())
                 .collect::<Vec<_>>();
+            titles.push(history.titles[index].to_lowercase());
             let urls = conversations
                 .iter()
                 .map(|conversation| conversation.url.to_lowercase())
@@ -268,7 +389,7 @@ impl SearchStore {
             let matched_prompt = best.map(|position| std::mem::take(&mut prompts[position]));
             let first = prompts.swap_remove(0);
             ranked.push((order, history.entry(index, first, matched_prompt)));
-            if ranked.len() == CANDIDATE_LIMIT {
+            if !all && !favorites && ranked.len() == CANDIDATE_LIMIT {
                 break;
             }
         }
@@ -276,7 +397,11 @@ impl SearchStore {
         ranked.sort_by_key(|(order, _)| Reverse(*order));
         Ok(ranked
             .into_iter()
-            .take(RESULT_LIMIT)
+            .take(if all || favorites {
+                usize::MAX
+            } else {
+                RESULT_LIMIT
+            })
             .map(|(_, entry)| entry)
             .collect())
     }
@@ -289,6 +414,8 @@ impl History {
         SearchEntry {
             id: self.prompts[chat[0]].0,
             title: self.titles[index].clone(),
+            custom_title: self.custom_titles[index],
+            favorite: self.favorites[index],
             prompt,
             matched_prompt,
             updated_at: self.prompts[latest].1.clone(),
@@ -312,6 +439,15 @@ fn initialize(connection: &mut Connection) -> Result<(), String> {
                 prompt TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS search_id_sequences (
+                name TEXT PRIMARY KEY,
+                last_id INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS chat_metadata (
+                prompt_id INTEGER PRIMARY KEY REFERENCES prompts (id) ON DELETE CASCADE,
+                custom_title TEXT,
+                favorite INTEGER NOT NULL DEFAULT 0
+            );
             CREATE INDEX IF NOT EXISTS prompts_by_age ON prompts (created_at DESC, id DESC);
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY,
@@ -322,7 +458,13 @@ fn initialize(connection: &mut Connection) -> Result<(), String> {
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (prompt_id, website_id)
-            );",
+            );
+            INSERT INTO search_id_sequences (name, last_id)
+                SELECT 'prompts', COALESCE(MAX(id), 0) FROM prompts WHERE true
+                ON CONFLICT(name) DO UPDATE SET last_id = MAX(last_id, excluded.last_id);
+            INSERT INTO search_id_sequences (name, last_id)
+                SELECT 'conversations', COALESCE(MAX(id), 0) FROM conversations WHERE true
+                ON CONFLICT(name) DO UPDATE SET last_id = MAX(last_id, excluded.last_id);",
         )
         .map_err(|error| error.to_string())?;
 
@@ -348,6 +490,24 @@ fn has_table(connection: &Connection, name: &str) -> Result<bool, String> {
             params![name],
             |row| row.get(0),
         )
+        .map_err(|error| error.to_string())
+}
+
+/// Reserves IDs permanently so late page updates cannot target a new record.
+fn next_id(connection: &Connection, table: &str) -> Result<i64, String> {
+    let query = match table {
+        "prompts" => "INSERT INTO search_id_sequences (name, last_id)
+            VALUES ('prompts', (SELECT COALESCE(MAX(id), 0) + 1 FROM prompts))
+            ON CONFLICT(name) DO UPDATE SET last_id = MAX(last_id, (SELECT COALESCE(MAX(id), 0) FROM prompts)) + 1
+            RETURNING last_id",
+        "conversations" => "INSERT INTO search_id_sequences (name, last_id)
+            VALUES ('conversations', (SELECT COALESCE(MAX(id), 0) + 1 FROM conversations))
+            ON CONFLICT(name) DO UPDATE SET last_id = MAX(last_id, (SELECT COALESCE(MAX(id), 0) FROM conversations)) + 1
+            RETURNING last_id",
+        _ => return Err("Unknown search ID sequence".into()),
+    };
+    connection
+        .query_row(query, [], |row| row.get(0))
         .map_err(|error| error.to_string())
 }
 
@@ -480,12 +640,44 @@ fn load_history(connection: &Connection) -> Result<History, String> {
     }
 
     let chats = group_chats(&conversations);
-    let titles = chat_titles(&chats, &conversations);
+    let mut titles = chat_titles(&chats, &conversations);
+    let metadata = connection
+        .prepare("SELECT prompt_id, custom_title, favorite FROM chat_metadata")
+        .map_err(|e| e.to_string())?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, bool>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(id, title, favorite)| (id, (title, favorite)))
+        .collect::<HashMap<_, _>>();
+    let mut custom_titles = Vec::new();
+    let mut favorites = Vec::new();
+    for (index, chat) in chats.iter().enumerate() {
+        let items = chat
+            .iter()
+            .filter_map(|&p| metadata.get(&prompts[p].0))
+            .collect::<Vec<_>>();
+        let custom = items.iter().find_map(|(title, _)| title.as_ref());
+        if let Some(title) = custom {
+            titles[index] = title.clone();
+        }
+        custom_titles.push(custom.is_some());
+        favorites.push(items.iter().any(|(_, favorite)| *favorite));
+    }
     Ok(History {
         prompts,
         conversations,
         chats,
         titles,
+        custom_titles,
+        favorites,
     })
 }
 
@@ -643,6 +835,8 @@ fn read_history(connection: &Connection) -> Result<Vec<StoredPrompt>, String> {
                         prompt: row.get(1)?,
                         created_at: row.get(2)?,
                         conversations: Vec::new(),
+                        custom_title: None,
+                        favorite: false,
                     },
                 ))
             })
@@ -655,6 +849,27 @@ fn read_history(connection: &Connection) -> Result<Vec<StoredPrompt>, String> {
             .map(|(position, (id, _))| (*id, position))
             .collect::<HashMap<_, _>>();
         history = prompts.into_iter().map(|(_, prompt)| prompt).collect();
+        if has_table(connection, "chat_metadata")? {
+            let mut statement = connection
+                .prepare("SELECT prompt_id, custom_title, favorite FROM chat_metadata")
+                .map_err(|e| e.to_string())?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                })
+                .map_err(|e| e.to_string())?;
+            for row in rows {
+                let (id, title, favorite) = row.map_err(|e| e.to_string())?;
+                if let Some(&position) = positions.get(&id) {
+                    history[position].custom_title = title;
+                    history[position].favorite = favorite;
+                }
+            }
+        }
 
         let mut statement = connection
             .prepare(
@@ -738,6 +953,8 @@ fn read_legacy(connection: &Connection) -> Result<Vec<StoredPrompt>, String> {
                     prompt,
                     created_at: conversation.created_at.clone(),
                     conversations: vec![conversation],
+                    custom_title: None,
+                    favorite: false,
                 });
             }
         }
@@ -747,22 +964,27 @@ fn read_legacy(connection: &Connection) -> Result<Vec<StoredPrompt>, String> {
 
 fn insert_history(connection: &Connection, history: &[StoredPrompt]) -> Result<(), String> {
     let mut add_prompt = connection
-        .prepare("INSERT INTO prompts (prompt, created_at) VALUES (?1, ?2)")
+        .prepare("INSERT INTO prompts (id, prompt, created_at) VALUES (?1, ?2, ?3)")
         .map_err(|error| error.to_string())?;
     let mut add_conversation = connection
         .prepare(
             "INSERT OR IGNORE INTO conversations
-             (prompt_id, website_id, title, url, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (id, prompt_id, website_id, title, url, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .map_err(|error| error.to_string())?;
     for stored in history {
-        let prompt_id = add_prompt
-            .insert(params![stored.prompt, stored.created_at])
+        let prompt_id = next_id(connection, "prompts")?;
+        add_prompt
+            .execute(params![prompt_id, stored.prompt, stored.created_at])
             .map_err(|error| error.to_string())?;
+        if stored.custom_title.is_some() || stored.favorite {
+            connection.execute("INSERT INTO chat_metadata (prompt_id, custom_title, favorite) VALUES (?1, ?2, ?3)", params![prompt_id, stored.custom_title, stored.favorite]).map_err(|e| e.to_string())?;
+        }
         for conversation in &stored.conversations {
             add_conversation
                 .execute(params![
+                    next_id(connection, "conversations")?,
                     prompt_id,
                     conversation.website_id,
                     conversation.title,
@@ -817,35 +1039,65 @@ fn import_history(destination: &mut Connection, source_path: &Path) -> Result<()
 }
 
 #[tauri::command]
-pub fn search_add_prompt(store: State<'_, SearchStore>, prompt: String) -> Result<i64, String> {
-    store.add_prompt(&prompt)
+pub async fn search_add_prompt(
+    store: State<'_, SearchStore>,
+    prompt: String,
+) -> Result<i64, String> {
+    store.run(move |store| store.add_prompt(&prompt)).await
 }
 
 #[tauri::command]
-pub fn search_add_conversation(
+pub async fn search_add_conversation(
     store: State<'_, SearchStore>,
     prompt_id: i64,
     website_id: String,
 ) -> Result<i64, String> {
-    store.add_conversation(prompt_id, &website_id)
+    store
+        .run(move |store| store.add_conversation(prompt_id, &website_id))
+        .await
 }
 
 #[tauri::command]
-pub fn search_update_conversation(
+pub async fn search_update_conversation(
     store: State<'_, SearchStore>,
     id: i64,
     title: String,
     url: String,
 ) -> Result<(), String> {
-    store.update_conversation(id, &title, &url)
+    store
+        .run(move |store| store.update_conversation(id, &title, &url))
+        .await
 }
 
 #[tauri::command]
-pub fn search_prompts(
+pub async fn search_prompts(
     store: State<'_, SearchStore>,
     query: String,
+    all: Option<bool>,
+    favorites: Option<bool>,
 ) -> Result<Vec<SearchEntry>, String> {
-    store.search(&query)
+    store
+        .run(move |store| {
+            store.search_options(&query, all.unwrap_or(false), favorites.unwrap_or(false))
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn search_update_chat(
+    store: State<'_, SearchStore>,
+    id: i64,
+    title: Option<String>,
+    favorite: Option<bool>,
+) -> Result<(), String> {
+    store
+        .run(move |store| store.update_chat(id, title, favorite))
+        .await
+}
+
+#[tauri::command]
+pub async fn search_delete_chat(store: State<'_, SearchStore>, id: i64) -> Result<(), String> {
+    store.run(move |store| store.delete_chat(id)).await
 }
 
 #[cfg(test)]
@@ -855,10 +1107,10 @@ mod tests {
     fn memory_store() -> SearchStore {
         let mut connection = Connection::open_in_memory().unwrap();
         initialize(&mut connection).unwrap();
-        SearchStore(Mutex::new(SearchDatabase {
+        SearchStore(Arc::new(Mutex::new(SearchDatabase {
             path: PathBuf::new(),
             connection,
-        }))
+        })))
     }
 
     /// Saves a prompt with one conversation per `(website, title, url)`.
@@ -873,6 +1125,152 @@ mod tests {
 
     fn prompts(entries: &[SearchEntry]) -> Vec<&str> {
         entries.iter().map(|entry| entry.prompt.as_str()).collect()
+    }
+
+    #[test]
+    fn database_work_runs_off_the_calling_thread_and_shares_the_live_store() {
+        let store = memory_store();
+        let calling_thread = std::thread::current().id();
+        let (worker_thread, id) = tauri::async_runtime::block_on(store.run(|store| {
+            Ok((
+                std::thread::current().id(),
+                store.add_prompt("Background prompt")?,
+            ))
+        }))
+        .unwrap();
+
+        assert_ne!(worker_thread, calling_thread);
+        assert_eq!(store.search("Background prompt").unwrap()[0].id, id);
+    }
+
+    #[test]
+    fn deleting_a_chat_removes_its_followups_and_metadata_only() {
+        let store = memory_store();
+        let first = save(
+            &store,
+            "first",
+            &[("claude", "First", "https://example.com/1")],
+        );
+        let followup = save(
+            &store,
+            "followup",
+            &[("claude", "Next", "https://example.com/1")],
+        );
+        let other = save(
+            &store,
+            "other",
+            &[("claude", "Other", "https://example.com/2")],
+        );
+        store
+            .update_chat(first, Some("Favorite".into()), Some(true))
+            .unwrap();
+
+        store.delete_chat(followup).unwrap();
+        assert_eq!(prompts(&store.search("").unwrap()), ["other"]);
+        assert!(store.search("followup").unwrap().is_empty());
+        let database = store.0.lock().unwrap();
+        let deleted_rows: i64 = database
+            .connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM conversations WHERE prompt_id IN (?1, ?2)) +
+                    (SELECT COUNT(*) FROM chat_metadata WHERE prompt_id IN (?1, ?2))",
+                params![first, followup],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(deleted_rows, 0);
+        drop(database);
+        assert!(store.delete_chat(first).is_err());
+        assert_eq!(store.search("").unwrap()[0].id, other);
+    }
+
+    #[test]
+    fn deleted_ids_cannot_be_reused_by_later_chats() {
+        let store = memory_store();
+        let old_prompt = save(
+            &store,
+            "old",
+            &[("claude", "Old", "https://example.com/old")],
+        );
+        let old_conversation = store.search("").unwrap()[0].conversations[0].id;
+        store.delete_chat(old_prompt).unwrap();
+
+        let new_prompt = save(
+            &store,
+            "new",
+            &[("claude", "New", "https://example.com/new")],
+        );
+        let new_conversation = store.search("").unwrap()[0].conversations[0].id;
+        assert!(new_prompt > old_prompt);
+        assert!(new_conversation > old_conversation);
+        store
+            .update_conversation(old_conversation, "Stale", "https://example.com/stale")
+            .unwrap();
+        assert_eq!(
+            store.search("").unwrap()[0].conversations[0].url,
+            "https://example.com/new"
+        );
+    }
+
+    #[test]
+    fn upgrading_existing_history_reserves_old_ids_before_deletion() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        initialize(&mut connection).unwrap();
+        connection
+            .execute("INSERT INTO prompts (id, prompt) VALUES (100, 'old')", [])
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO conversations (id, prompt_id, website_id) VALUES (200, 100, 'claude')",
+                [],
+            )
+            .unwrap();
+        initialize(&mut connection).unwrap();
+        let store = SearchStore(Arc::new(Mutex::new(SearchDatabase {
+            path: PathBuf::new(),
+            connection,
+        })));
+        store.delete_chat(100).unwrap();
+        let prompt = store.add_prompt("new").unwrap();
+        assert!(prompt > 100);
+        assert!(store.add_conversation(prompt, "claude").unwrap() > 200);
+    }
+
+    #[test]
+    fn favorites_and_custom_titles_survive_updates_and_filter_all_history() {
+        let store = memory_store();
+        let first = save(
+            &store,
+            "first",
+            &[("claude", "Original", "https://example.com/1")],
+        );
+        let conversation = store.search("").unwrap()[0].conversations[0].id;
+        store
+            .update_chat(first, Some("My title".into()), Some(true))
+            .unwrap();
+        store
+            .update_conversation(
+                conversation,
+                "Updated provider title",
+                "https://example.com/1",
+            )
+            .unwrap();
+        for i in 0..25 {
+            save(&store, &format!("other {i}"), &[]);
+        }
+        assert_eq!(store.search("").unwrap().len(), 20);
+        assert_eq!(store.search_options("", true, false).unwrap().len(), 26);
+        let favorites = store.search_options("", false, true).unwrap();
+        assert_eq!(favorites.len(), 1);
+        assert_eq!(favorites[0].title, "My title");
+        assert!(favorites[0].custom_title && favorites[0].favorite);
+        assert_eq!(
+            store.search_options("my title", false, true).unwrap().len(),
+            1
+        );
+        store.update_chat(first, None, Some(false)).unwrap();
+        assert!(store.search_options("", false, true).unwrap().is_empty());
+        assert!(store.update_chat(first, Some("  ".into()), None).is_err());
     }
 
     #[test]
@@ -1097,10 +1495,10 @@ mod tests {
         create_legacy_table(&connection);
         initialize(&mut connection).unwrap();
         assert!(!has_table(&connection, "prompt_entries").unwrap());
-        let store = SearchStore(Mutex::new(SearchDatabase {
+        let store = SearchStore(Arc::new(Mutex::new(SearchDatabase {
             path: PathBuf::new(),
             connection,
-        }));
+        })));
 
         let results = store.search("same").unwrap();
         assert_eq!(results.len(), 2);
@@ -1170,11 +1568,14 @@ mod tests {
             &[("chatgpt", "", "https://chatgpt.com/c/1")],
         );
         let other = SearchStore::open(target.clone()).unwrap();
-        save(
+        let target_id = save(
             &other,
             "Target prompt",
             &[("claude", "", "https://claude.ai/chat/1")],
         );
+        other
+            .update_chat(target_id, Some("Saved target".into()), Some(true))
+            .unwrap();
         drop(other);
 
         store.move_to(&target).unwrap();
@@ -1182,6 +1583,8 @@ mod tests {
         assert_eq!(store.search("Live prompt").unwrap()[0].id, live_id);
         let merged = store.search("Target prompt").unwrap();
         assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].title, "Saved target");
+        assert!(merged[0].favorite);
         assert_eq!(merged[0].conversations[0].url, "https://claude.ai/chat/1");
         store.add_prompt("After move").unwrap();
         drop(store);

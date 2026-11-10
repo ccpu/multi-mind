@@ -40,6 +40,7 @@
     "@internal/utils": "workspace:*",
     "@pixpilot/shadcn": "catalog:prod",
     "@pixpilot/shadcn-ui": "catalog:prod",
+    "@tanstack/react-virtual": "catalog:prod",
     "@tauri-apps/api": "catalog:prod",
     "@tauri-apps/plugin-clipboard-manager": "catalog:prod",
     "@tauri-apps/plugin-dialog": "catalog:prod",

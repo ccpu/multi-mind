@@ -11,9 +11,10 @@ import {
   OPEN_MESSAGE_PREFIX,
 } from '@internal/multi-mind';
 import { appApi, openExternal } from '@internal/tauri-api';
+import { OverlayProvider } from '@internal/ui';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/windows/main/App';
 import { onAiResponseCompleted } from '../src/windows/main/response-completion';
 
@@ -29,7 +30,9 @@ const searchAddConversation =
   vi.fn<(promptId: number, websiteId: string) => Promise<number>>();
 const searchUpdateConversation =
   vi.fn<(id: number, title: string, url: string) => Promise<void>>();
-const searchPrompts = vi.fn<(query: string) => Promise<SearchEntry[]>>();
+const searchPrompts =
+  vi.fn<(query: string, all: boolean, favorites: boolean) => Promise<SearchEntry[]>>();
+const searchDeleteChat = vi.fn<(id: number) => Promise<void>>();
 const settingsListeners = new Set<(settings: AppSettings) => void>();
 const guestListeners = new Set<(event: GuestMessageEvent) => void>();
 
@@ -52,7 +55,9 @@ vi.mock('@internal/tauri-api', () => ({
         searchAddConversation(promptId, websiteId),
       searchUpdateConversation: async (id: number, title: string, url: string) =>
         searchUpdateConversation(id, title, url),
-      searchPrompts: async (query: string) => searchPrompts(query),
+      searchPrompts: async (query: string, all: boolean, favorites: boolean) =>
+        searchPrompts(query, all, favorites),
+      searchDeleteChat: async (id: number) => searchDeleteChat(id),
     },
     events: {
       onSettingsChanged: (callback: (settings: AppSettings) => void) => {
@@ -89,6 +94,18 @@ function stub(overrides: Partial<AppSettings> = {}): AppSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
 }
 
+/** Supplies the layout measurements jsdom cannot compute for a virtualized list. */
+function mockSearchListSize(): void {
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.hasAttribute('data-index') ? 96 : 340;
+  });
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(384);
+}
+
+afterEach(() => vi.restoreAllMocks());
+
 /** Stands in for Rust broadcasting a change made in the settings window. */
 function broadcast(settings: AppSettings): void {
   settingsListeners.forEach((listener) => listener(settings));
@@ -124,6 +141,7 @@ beforeEach(() => {
   searchAddConversation.mockResolvedValue(1);
   searchUpdateConversation.mockResolvedValue(undefined);
   searchPrompts.mockResolvedValue([]);
+  searchDeleteChat.mockResolvedValue(undefined);
 });
 
 describe('main window', () => {
@@ -767,7 +785,82 @@ describe('main window', () => {
     });
   });
 
+  it('shows loading immediately and allows typing while history is still loading', async () => {
+    const user = userEvent.setup();
+    let finish: (entries: SearchEntry[]) => void = () => undefined;
+    searchPrompts.mockImplementationOnce(
+      async () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<App />);
+    await waitForPanes();
+
+    const input = screen.getByRole('textbox', { name: 'Search saved prompts' });
+    await user.click(input);
+    expect(await screen.findByText('Loading saved prompts…')).toBeInTheDocument();
+    await user.type(input, 'cache');
+    expect(input).toHaveValue('cache');
+    finish([]);
+
+    expect(await screen.findByText('No saved prompts found.')).toBeInTheDocument();
+    expect(searchPrompts).toHaveBeenLastCalledWith('cache', false, false);
+  });
+
+  it('opens all history separately from the recent chats shown on focus', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitForPanes();
+
+    await user.click(screen.getByRole('textbox', { name: 'Search saved prompts' }));
+    await waitFor(() => expect(searchPrompts).toHaveBeenCalledWith('', false, false));
+    await user.click(screen.getByRole('button', { name: 'Show all history' }));
+    await waitFor(() => expect(searchPrompts).toHaveBeenCalledWith('', true, false));
+  });
+
+  it('deletes saved chats only after confirmation and refreshes the list', async () => {
+    mockSearchListSize();
+    const user = userEvent.setup();
+    let deleted = false;
+    const entry: SearchEntry = {
+      id: 12,
+      title: 'Saved chat',
+      prompt: 'A saved prompt',
+      updatedAt: '',
+      conversations: [],
+    };
+    searchPrompts.mockImplementation(async () => (deleted ? [] : [entry]));
+    searchDeleteChat.mockImplementation(async () => {
+      deleted = true;
+    });
+    render(
+      <OverlayProvider>
+        <App />
+      </OverlayProvider>,
+    );
+    await waitForPanes();
+    const input = screen.getByRole('textbox', { name: 'Search saved prompts' });
+    await user.click(input);
+    await user.click(await screen.findByRole('button', { name: 'Delete saved chat' }));
+    let confirmation = await screen.findByRole('dialog', { name: 'Delete saved chat?' });
+    expect(confirmation).toHaveTextContent('provider websites');
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(searchDeleteChat).not.toHaveBeenCalled();
+
+    await user.click(input);
+    await user.click(await screen.findByRole('button', { name: 'Delete saved chat' }));
+    confirmation = await screen.findByRole('dialog', { name: 'Delete saved chat?' });
+    await user.click(
+      within(confirmation).getByRole('button', { name: 'Delete permanently' }),
+    );
+    await waitFor(() => expect(searchDeleteChat).toHaveBeenCalledExactlyOnceWith(12));
+    await user.click(input);
+    expect(await screen.findByText('No saved prompts yet.')).toBeInTheDocument();
+  });
+
   it('enables a disabled provider and opens a saved conversation', async () => {
+    mockSearchListSize();
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
       stub({
@@ -816,6 +909,7 @@ describe('main window', () => {
   });
 
   it('lists a chat by its title and first prompt and opens all or one of its providers', async () => {
+    mockSearchListSize();
     const user = userEvent.setup();
     settingsGet.mockResolvedValue(
       stub({ promptEditor: 'plain', activeWebsites: ['claude', 'chatgpt'] }),
@@ -840,7 +934,7 @@ describe('main window', () => {
     // Focusing the empty box lists recent prompts.
     await user.click(screen.getByRole('textbox', { name: 'Search saved prompts' }));
     expect(await screen.findByText('Recent chats')).toBeInTheDocument();
-    expect(searchPrompts).toHaveBeenCalledWith('');
+    expect(searchPrompts).toHaveBeenCalledWith('', false, false);
     // The captured title, without the provider name, then the first prompt.
     expect(
       screen.getAllByRole('button', {

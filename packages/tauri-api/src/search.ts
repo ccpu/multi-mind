@@ -17,6 +17,8 @@ export interface SearchEntry {
   id: number;
   /** A page title captured on one of the chat's conversations, or empty. */
   title: string;
+  customTitle?: boolean;
+  favorite?: boolean;
   /** The first prompt sent in the chat. */
   prompt: string;
   /** A later prompt that matches the search better than the first one. */
@@ -52,6 +54,24 @@ export async function searchUpdateConversation(
  * Finds chats whose prompts, conversation titles, or URLs hold every word of
  * the query, best matches first. An empty query lists the most recent chats.
  */
-export async function searchPrompts(query: string): Promise<SearchEntry[]> {
-  return invoke<SearchEntry[]>('search_prompts', { query });
+export async function searchPrompts(
+  query: string,
+  all = false,
+  favorites = false,
+): Promise<SearchEntry[]> {
+  return invoke<SearchEntry[]>('search_prompts', { query, all, favorites });
+}
+
+/** Changes a chat's saved title or favorite status. */
+export async function searchUpdateChat(
+  id: number,
+  title?: string,
+  favorite?: boolean,
+): Promise<void> {
+  return invoke<void>('search_update_chat', { id, title, favorite });
+}
+
+/** Deletes all locally saved prompts and metadata belonging to a chat. */
+export async function searchDeleteChat(id: number): Promise<void> {
+  return invoke<void>('search_delete_chat', { id });
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-search-delete-chat"
+description = "Enables the search_delete_chat command without any pre-configured scope."
+commands.allow = ["search_delete_chat"]
+
+[[permission]]
+identifier = "deny-search-delete-chat"
+description = "Denies the search_delete_chat command without any pre-configured scope."
+commands.deny = ["search_delete_chat"]

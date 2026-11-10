@@ -47,6 +47,9 @@ function escapeRegExp(text: string): string {
  */
 export function chatTitle(entry: SearchEntry, websites: readonly WebsiteInfo[]): string {
   const title = entry.title.replace(/\s+/gu, ' ').trim();
+  if (entry.customTitle) {
+    return title;
+  }
   const names = websites
     .filter(
       (website) =>

@@ -52,6 +52,8 @@ pub fn run() {
             search::search_add_conversation,
             search::search_update_conversation,
             search::search_prompts,
+            search::search_update_chat,
+            search::search_delete_chat,
             guest::get_guest_config,
             guest::guest_sync,
             guest::guest_set_visible,

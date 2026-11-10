@@ -20,6 +20,8 @@
     "allow-search-add-conversation",
     "allow-search-update-conversation",
     "allow-search-prompts",
+    "allow-search-update-chat",
+    "allow-search-delete-chat",
     "allow-get-guest-config",
     "allow-guest-sync",
     "allow-guest-set-visible",

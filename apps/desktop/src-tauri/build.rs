@@ -23,6 +23,8 @@ fn main() {
             "search_add_conversation",
             "search_update_conversation",
             "search_prompts",
+            "search_update_chat",
+            "search_delete_chat",
             "get_guest_config",
             "guest_sync",
             "guest_set_visible",

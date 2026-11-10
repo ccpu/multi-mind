@@ -91,6 +91,9 @@ catalogs:
     '@pixpilot/shadcn-ui':
       specifier: ^3.17.3
       version: 3.17.3
+    '@tanstack/react-virtual':
+      specifier: ^3.14.13
+      version: 3.14.13
     '@tauri-apps/api':
       specifier: ^2.11.1
       version: 2.11.1
@@ -252,6 +255,9 @@ importers:
       '@pixpilot/shadcn-ui':
         specifier: catalog:prod
         version: 3.17.3(@floating-ui/dom@1.8.0)(@floating-ui/react@0.27.20(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@tiptap/pm@3.31.3)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(ajv@8.17.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwindcss@4.3.3)
+      '@tanstack/react-virtual':
+        specifier: catalog:prod
+        version: 3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tauri-apps/api':
         specifier: catalog:prod
         version: 2.11.1
