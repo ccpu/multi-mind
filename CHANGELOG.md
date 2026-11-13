@@ -1,3 +1,16 @@
+# [1.20.0](https://github.com/ccpu/multi-mind/compare/v1.19.0...v1.20.0) (2026-11-13)
+
+
+### Bug Fixes
+
+* **use-split-layout:** adjust gutter width calculations in tests ([fe8584a](https://github.com/ccpu/multi-mind/commit/fe8584a1c109bc61c1fdd70d97f2534d04beb216))
+
+
+### Features
+
+* **conversation:** implement conversation structure and flow ([5f9b0f0](https://github.com/ccpu/multi-mind/commit/5f9b0f0c2188a8ac531c70f2f2f4db6d15e93501))
+* **prompt-panel:** enhance editor interaction and selection behavior ([c57b6fe](https://github.com/ccpu/multi-mind/commit/c57b6feb119732b6fe51152e9250f69fffe5c2b6))
+
 # [1.19.0](https://github.com/ccpu/multi-mind/compare/v1.18.1...v1.19.0) (2026-11-10)
 
 
