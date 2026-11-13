@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/ccpu/multi-mind/compare/v1.18.1...v1.19.0) (2026-11-10)
+
+
+### Features
+
+* **search:** enhance search history functionality with edit and delete options ([277f1b1](https://github.com/ccpu/multi-mind/commit/277f1b1ae44a1884983d591ff4054e4628c26385))
+
 ## [1.18.1](https://github.com/ccpu/multi-mind/compare/v1.18.0...v1.18.1) (2026-10-25)
 
 
