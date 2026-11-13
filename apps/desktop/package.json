@@ -50,7 +50,6 @@
     "react": "catalog:prod",
     "react-dom": "catalog:prod",
     "react-icons": "catalog:prod",
-    "split.js": "catalog:prod",
     "tailwindcss": "catalog:prod"
   },
   "devDependencies": {

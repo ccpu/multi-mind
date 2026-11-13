@@ -19,7 +19,7 @@ import {
  * Electron gave the port a `<webview>` element the renderer laid out itself.
  * Tauri has neither: a guest is a child webview of the window, owned by Rust
  * and positioned in window coordinates, drawn over whatever the host page has
- * there. So the host still decides the layout — Split.js still runs — but what
+ * there. So the host still decides the layout — the split layout still runs — but what
  * it lays out is an empty box whose measurements are sent down here.
  *
  * Everything below is plumbing on purpose. What a guest should show, when it

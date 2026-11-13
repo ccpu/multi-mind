@@ -6,9 +6,8 @@ import {
   createId,
   getActivePrompts,
   getActiveWebsites,
-  getBottomPanelPercent,
-  getForcedBottomPanelPercent,
   getMenuWebsites,
+  getPromptSizeKey,
   HistoryManager,
   promptsToSend,
 } from '@internal/multi-mind';
@@ -19,7 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { MenuBar } from './components/MenuBar';
 import { PROMPT_SURFACE_SELECTOR } from './components/prompt-surface';
-import { PromptPanel } from './components/PromptPanel';
+import { PROMPT_PANEL_MIN_HEIGHT, PromptPanel } from './components/PromptPanel';
+import { PromptResizeHandle } from './components/PromptResizeHandle';
 import { WebViewPanel } from './components/WebViewPanel';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useDownloadToasts } from './hooks/useDownloadToasts';
@@ -36,13 +36,12 @@ import { useResponseCompletionToast } from './response-completion/hooks/use-resp
  * Port of `Multi Mind/MainForm.cs`. The three docked WinForms panels become three
  * flex rows: the menu strip on top, the embedded browsers in the middle, and
  * the prompt box at the bottom sized as a percentage of the window. The
- * browsers themselves are split by Split.js, which the WinForms original could
+ * browsers themselves are split by draggable gutters, which the WinForms original could
  * not do: it always laid them out in equal columns.
  */
 function App() {
   const {
     settings,
-    loaded,
     toggleWebsite,
     openWebsites,
     togglePreset,
@@ -51,6 +50,7 @@ function App() {
     addPreset,
     updatePreset,
     removePreset,
+    setPromptSize,
   } = useAppSettings();
   const {
     usedPrompts,
@@ -61,7 +61,13 @@ function App() {
   } = useUsedPresets();
   useDownloadToasts();
   const [prompt, setPrompt] = useState('');
-  const [bottomPercent, setBottomPercent] = useState(settings.autoShrinkSize);
+  // Whether the prompt box is shrunk; its two sizes are the settings' own, so
+  // a size changed in the settings window shows here straight away.
+  const [collapsed, setCollapsed] = useState(true);
+  // The size the splitter is being dragged to, until it is let go.
+  const [dragPercent, setDragPercent] = useState<number | null>(null);
+  const promptSizeKey = getPromptSizeKey(settings, collapsed);
+  const bottomPercent = dragPercent ?? settings[promptSizeKey];
   const [guestConfig, setGuestConfig] = useState<GuestConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
@@ -110,9 +116,7 @@ function App() {
     openUrl,
   } = useGuestPanes(guestConfig === null ? [] : activeWebsites, guestConfig);
 
-  const collapsePrompt = useCallback(() => {
-    setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
-  }, []);
+  const collapsePrompt = useCallback(() => setCollapsed(true), []);
 
   const { recordPrompt, reportPage, stopTracking } = useSearchHistory();
   const handlePromptError = useCallback(
@@ -140,6 +144,7 @@ function App() {
   });
 
   const overlayOpen = useOverlayPresence();
+  const [promptDragging, setPromptDragging] = useState(false);
 
   useEffect(() => {
     appApi.invoke.getGuestConfig().then(setGuestConfig, (error: unknown) => {
@@ -153,30 +158,22 @@ function App() {
    * visibility fallback until native clipping is available there.
    */
   useEffect(() => {
-    appApi.guest.setVisible(!dragging && !overlayOpen).catch((error: unknown) => {
-      console.error('Failed to change the embedded browsers visibility:', error);
-    });
-  }, [dragging, overlayOpen]);
+    appApi.guest
+      .setVisible(!dragging && !promptDragging && !overlayOpen)
+      .catch((error: unknown) => {
+        console.error('Failed to change the embedded browsers visibility:', error);
+      });
+  }, [dragging, promptDragging, overlayOpen]);
 
   /** `MainForm_Load` gives the prompt box focus. */
   useEffect(() => {
     promptRef.current?.focus();
   }, []);
 
-  /** `MainForm_Load` and the `WebViewsAdded` event both re-sized the panels. */
-  useEffect(() => {
-    setBottomPercent(getBottomPanelPercent(settingsRef.current, promptTextRef.current));
-  }, [activeWebsites, loaded]);
-
-  /** `Form1_Resize`. */
-  useEffect(() => {
-    const handleResize = () => {
-      setBottomPercent(getBottomPanelPercent(settingsRef.current, promptTextRef.current));
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // The WinForms build also re-sized the panels on load, on `WebViewsAdded`
+  // and on `Form1_Resize`, opening the box again whenever it held text. Only
+  // pressing or typing in the box itself opens it now, so those are gone: the
+  // sizes are the settings' own and follow them without being re-applied.
 
   /**
    * `AttachMouseDownEventHandlers` / `MainForm_MouseDown`: pressing anywhere
@@ -184,20 +181,32 @@ function App() {
    */
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
-      const { target } = event;
+      // The path as it was when the press began, not the target's ancestors
+      // now: by the time the press bubbles up here CodeMirror may have redrawn
+      // the line under it — a double-click selecting a word does — and the
+      // node pressed is no longer in the document at all.
+      const path = event.composedPath();
+      const editor = promptRef.current;
 
-      if (promptRef.current?.contains(target as Node) === true) {
+      if (
+        editor !== null &&
+        path.some((node) => node instanceof Node && editor.contains(node))
+      ) {
         return;
       }
 
       // The preset badges and their editors are the prompt box's own
       // furniture rather than somewhere else in the window, and the editors
       // are portalled out of it, so they say so themselves.
-      if (target instanceof Element && target.closest(PROMPT_SURFACE_SELECTOR) !== null) {
+      if (
+        path.some(
+          (node) => node instanceof Element && node.matches(PROMPT_SURFACE_SELECTOR),
+        )
+      ) {
         return;
       }
 
-      setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
+      setCollapsed(true);
     };
 
     document.addEventListener('mousedown', handleMouseDown);
@@ -280,7 +289,7 @@ function App() {
       }
 
       setPrompt('');
-      setBottomPercent(getForcedBottomPanelPercent(settingsRef.current));
+      setCollapsed(true);
     },
     [
       beginResponse,
@@ -383,9 +392,16 @@ function App() {
   const openPrompts = useCallback(() => setPromptsOpen(true), []);
 
   /** Typing in or clicking the prompt box takes it back to its full size. */
-  const expandPrompt = useCallback(() => {
-    setBottomPercent(settingsRef.current.panelButtonSize);
-  }, []);
+  const expandPrompt = useCallback(() => setCollapsed(false), []);
+
+  /** Dragging the splitter sets whichever of the two sizes is showing. */
+  const finishPromptResize = useCallback(
+    (percent: number) => {
+      setPromptSize(promptSizeKey, percent);
+      setDragPercent(null);
+    },
+    [promptSizeKey, setPromptSize],
+  );
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -419,6 +435,14 @@ function App() {
               />
             ))}
       </div>
+
+      <PromptResizeHandle
+        percent={bottomPercent}
+        minHeight={PROMPT_PANEL_MIN_HEIGHT}
+        onResize={setDragPercent}
+        onResizeEnd={finishPromptResize}
+        onDraggingChange={setPromptDragging}
+      />
 
       <PromptPanel
         editorRef={promptRef}

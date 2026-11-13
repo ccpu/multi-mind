@@ -179,6 +179,35 @@ describe('settings window', () => {
     });
   });
 
+  it('saves a prompt box size typed as a number', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = screen.getByLabelText('Text box size');
+    await user.clear(input);
+    await user.type(input, '35.5');
+
+    await waitFor(() => {
+      expect(settingsSave).toHaveBeenCalledWith({ panelButtonSize: 35.5 });
+    });
+  });
+
+  it('does not save a prompt box size outside the allowed range', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = screen.getByLabelText('Text box size');
+    await user.clear(input);
+    await user.type(input, '99');
+    await user.tab();
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 600);
+    });
+    expect(settingsSave).not.toHaveBeenCalledWith({ panelButtonSize: 99 });
+    expect(input).not.toHaveValue(99);
+  });
+
   it('starts with the update check on', async () => {
     render(<App />);
 
@@ -348,7 +377,7 @@ describe('settings window', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Text box size')).toHaveTextContent('60%');
+      expect(screen.getByLabelText('Text box size')).toHaveValue(60);
     });
   });
 

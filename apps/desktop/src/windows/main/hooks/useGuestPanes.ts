@@ -28,7 +28,7 @@ function readBounds(element: HTMLElement): GuestBounds {
  * Rust side owns, drawn over the window in window coordinates and knowing
  * nothing about the page underneath it.
  *
- * So the page keeps the layout — the same flex row, the same Split.js, the same
+ * So the page keeps the layout — the same flex row, the same draggable
  * gutters — but what it lays out is an empty box per site. Its measurements go
  * to Rust, which puts the real browser exactly there. Everything the user
  * touches is still decided by CSS; only the last step is not.
@@ -180,7 +180,7 @@ export function useGuestPanes(
   useLayoutEffect(sync);
 
   /*
-   * Dragging a Split.js gutter resizes the boxes without React hearing about
+   * Dragging a gutter resizes the boxes without React hearing about
    * it, and so does the window itself. A `ResizeObserver` per box catches both,
    * which is what keeps a browser under the divider the user is dragging.
    */

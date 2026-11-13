@@ -1,6 +1,7 @@
 import type { PromptPreset } from '../src/prompts';
 import type { AppSettings } from '../src/settings';
 import { describe, expect, it } from 'vitest';
+import { PROMPT_SIZE_MAX, PROMPT_SIZE_MIN } from '../src/layout';
 import {
   addPrompt,
   addWebsite,
@@ -193,6 +194,13 @@ describe('normalizeSettings', () => {
     expect(settings.autoShrink).toBe(DEFAULT_SETTINGS.autoShrink);
     expect(settings.autoShrinkSize).toBe(DEFAULT_SETTINGS.autoShrinkSize);
     expect(settings.websites).toStrictEqual([...DEFAULT_WEBSITES]);
+  });
+
+  it('keeps prompt box sizes inside the range the splitter allows', () => {
+    const settings = normalizeSettings({ panelButtonSize: 100, autoShrinkSize: 0 });
+
+    expect(settings.panelButtonSize).toBe(PROMPT_SIZE_MAX);
+    expect(settings.autoShrinkSize).toBe(PROMPT_SIZE_MIN);
   });
 
   it('leaves the update check on, and unasked about, in a settings file without it', () => {

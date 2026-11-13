@@ -59,7 +59,6 @@ export function MarkdownPromptEditor({
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.codemirror.focus(),
-    selectAll: () => editorRef.current?.codemirror.execCommand('selectAll'),
     contains: (node: Node) => containerRef.current?.contains(node) === true,
   }));
 
@@ -95,7 +94,13 @@ export function MarkdownPromptEditor({
       propsRef.current.onActivate();
     });
 
-    codemirror.on('focus', () => propsRef.current.onActivate());
+    // Only a click in the editor or typing into it wakes the box, as with the
+    // plain editor. Focus is no signal: it comes back to the editor whenever
+    // the window does, after a click in a browser or on the splitter, and a
+    // click on an editor that already has focus raises no focus event at all.
+    const wrapper = codemirror.getWrapperElement();
+    const activate = () => propsRef.current.onActivate();
+    wrapper.addEventListener('click', activate);
 
     // Added at the top of the keymap stack, so these win over CodeMirror's own
     // bindings — Shift-Ctrl-Z is redo by default, and here it is the history.
@@ -109,6 +114,7 @@ export function MarkdownPromptEditor({
     editorRef.current = editor;
 
     return () => {
+      wrapper.removeEventListener('click', activate);
       editorRef.current = null;
       // Puts the original textarea back, which is what lets React unmount the
       // subtree without CodeMirror's nodes left behind in it.

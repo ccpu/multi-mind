@@ -5,8 +5,6 @@
  */
 export interface PromptEditorHandle {
   focus: () => void;
-  /** Selects the whole prompt, for the third-click gesture. */
-  selectAll: () => void;
   /**
    * Whether a node is inside the editor. The main window collapses the prompt
    * box when a press lands outside it, and EasyMDE's DOM is a tree of its own

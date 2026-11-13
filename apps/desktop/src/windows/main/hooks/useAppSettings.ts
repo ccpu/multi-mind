@@ -1,4 +1,9 @@
-import type { AppSettings, PromptPreset, PromptPresetDraft } from '@internal/multi-mind';
+import type {
+  AppSettings,
+  PromptPreset,
+  PromptPresetDraft,
+  PromptSizeKey,
+} from '@internal/multi-mind';
 import {
   addPrompt,
   DEFAULT_SETTINGS,
@@ -31,6 +36,8 @@ export interface UseAppSettingsResult {
   updatePreset: (promptId: string, draft: PromptPresetDraft) => void;
   /** Drops a preset, and unticks it with it. */
   removePreset: (promptId: string) => void;
+  /** Keeps a size the prompt box was dragged to. */
+  setPromptSize: (key: PromptSizeKey, percent: number) => void;
 }
 
 /**
@@ -192,6 +199,15 @@ export function useAppSettings(): UseAppSettingsResult {
     [save],
   );
 
+  const setPromptSize = useCallback(
+    (key: PromptSizeKey, percent: number) => {
+      if (settingsRef.current[key] !== percent) {
+        save({ [key]: percent });
+      }
+    },
+    [save],
+  );
+
   return {
     settings,
     loaded,
@@ -203,5 +219,6 @@ export function useAppSettings(): UseAppSettingsResult {
     addPreset,
     updatePreset,
     removePreset,
+    setPromptSize,
   };
 }

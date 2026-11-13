@@ -12,7 +12,7 @@ import {
 } from '@internal/multi-mind';
 import { appApi, openExternal } from '@internal/tauri-api';
 import { OverlayProvider } from '@internal/ui';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/windows/main/App';
@@ -273,6 +273,142 @@ describe('main window', () => {
     );
 
     expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+  });
+
+  it('stays collapsed after a press outside, even holding text, until the box itself is pressed', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }),
+    );
+    const { container } = render(<App />);
+    const box = await screen.findByPlaceholderText(/Ask every enabled model/u);
+    await user.type(box, 'hello');
+    expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+
+    fireEvent.mouseDown(document.body);
+    expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+
+    // Nothing but the box itself opens it again: not the window resizing, and
+    // not the settings changing.
+    fireEvent(window, new Event('resize'));
+    broadcast(stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }));
+    await waitFor(() => {
+      expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+    });
+
+    await user.click(box);
+    expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+  });
+
+  it('stays open when the editor redraws the text pressed, as a double-click does', async () => {
+    settingsGet.mockResolvedValue(stub({ panelButtonSize: 40, autoShrinkSize: 10 }));
+    const { container } = render(<App />);
+    const editor = await waitFor(() => {
+      const element = container.querySelector<HTMLElement>('.CodeMirror');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    await waitFor(() => {
+      expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+    });
+
+    fireEvent.click(editor);
+    expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+
+    // CodeMirror handles the press first and swaps the line out from under it.
+    const line = document.createElement('span');
+    editor.append(line);
+    editor.addEventListener('mousedown', () => line.remove(), { once: true });
+    fireEvent.mouseDown(line);
+
+    expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+  });
+
+  it('sets the collapsed size from the splitter while the box is shrunk', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }),
+    );
+    const { container } = render(<App />);
+    await waitFor(() => {
+      expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+    });
+
+    screen.getByRole('separator', { name: 'Resize prompt box' }).focus();
+    await user.keyboard('{ArrowUp}');
+
+    expect(settingsSave).toHaveBeenCalledWith({ autoShrinkSize: 11 });
+    expect(container.querySelector('[style*="height: 11%"]')).not.toBeNull();
+  });
+
+  it('sets the expanded size from the splitter once the box is open', async () => {
+    const user = userEvent.setup();
+    settingsGet.mockResolvedValue(
+      stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }),
+    );
+    const { container } = render(<App />);
+    await user.type(
+      await screen.findByPlaceholderText(/Ask every enabled model/u),
+      'hello',
+    );
+    expect(container.querySelector('[style*="height: 40%"]')).not.toBeNull();
+
+    screen.getByRole('separator', { name: 'Resize prompt box' }).focus();
+    await user.keyboard('{ArrowDown}');
+
+    expect(settingsSave).toHaveBeenCalledWith({ panelButtonSize: 39 });
+    expect(container.querySelector('[style*="height: 39%"]')).not.toBeNull();
+  });
+
+  it('follows the pointer while the splitter is dragged, and keeps where it is let go', async () => {
+    settingsGet.mockResolvedValue(
+      stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }),
+    );
+    const { container } = render(<App />);
+    await waitFor(() => {
+      expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+    });
+
+    const handle = screen.getByRole('separator', { name: 'Resize prompt box' });
+    vi.spyOn(handle.parentElement!, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 1000,
+      height: 1000,
+    } as DOMRect);
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 900 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 750 });
+
+    expect(container.querySelector('[style*="height: 25%"]')).not.toBeNull();
+    expect(settingsSave).not.toHaveBeenCalledWith({ autoShrinkSize: 25 });
+
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 750 });
+
+    expect(settingsSave).toHaveBeenCalledWith({ autoShrinkSize: 25 });
+  });
+
+  it('stops the splitter where the prompt box contents would start to overflow', async () => {
+    settingsGet.mockResolvedValue(
+      stub({ panelButtonSize: 40, autoShrinkSize: 10, promptEditor: 'plain' }),
+    );
+    const { container } = render(<App />);
+    await waitFor(() => {
+      expect(container.querySelector('[style*="height: 10%"]')).not.toBeNull();
+    });
+
+    const handle = screen.getByRole('separator', { name: 'Resize prompt box' });
+    vi.spyOn(handle.parentElement!, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 1000,
+      height: 1000,
+    } as DOMRect);
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 900 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 995 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 995 });
+
+    // 92px of a 1000px window.
+    expect(settingsSave).toHaveBeenCalledWith({ autoShrinkSize: 9.2 });
   });
 
   it('builds the prompt box as a markdown editor by default', async () => {

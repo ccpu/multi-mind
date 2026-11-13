@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 interface WebViewPanelProps {
   website: WebsiteInfo;
   /**
-   * False while Split.js owns the width of this pane. A lone browser has no
+   * False while the split layout owns the width of this pane. A lone browser has no
    * gutter to drag, so it grows to fill the row instead.
    */
   grow: boolean;
@@ -40,7 +40,7 @@ export function WebViewPanel({
     [onRegister, website.id],
   );
 
-  // Split.js writes an inline width onto this wrapper, so it must not be a flex
+  // The split layout writes an inline width onto this wrapper, so it must not be a flex
   // item with a basis of its own.
   return (
     <div

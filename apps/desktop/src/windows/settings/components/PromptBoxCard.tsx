@@ -1,8 +1,10 @@
-import type { AppSettings, PromptEditorKind } from '@internal/multi-mind';
+import type { AppSettings, PromptEditorKind, PromptSizeKey } from '@internal/multi-mind';
+import type { ChangeEvent } from 'react';
 import {
-  AUTO_SHRINK_SIZE_OPTIONS,
+  clampPromptSize,
   PROMPT_EDITOR_OPTIONS,
-  TEXTBOX_SIZE_OPTIONS,
+  PROMPT_SIZE_MAX,
+  PROMPT_SIZE_MIN,
 } from '@internal/multi-mind';
 import { Label, Switch } from '@pixpilot/shadcn';
 import {
@@ -11,19 +13,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
   Select,
 } from '@pixpilot/shadcn-ui';
-import { useCallback } from 'react';
-
-const TEXTBOX_SIZE_SELECT_OPTIONS = TEXTBOX_SIZE_OPTIONS.map((size) => ({
-  value: String(size),
-  label: `${size}%`,
-}));
-
-const AUTO_SHRINK_SIZE_SELECT_OPTIONS = AUTO_SHRINK_SIZE_OPTIONS.map((size) => ({
-  value: String(size),
-  label: `${size}%`,
-}));
+import { useCallback, useState } from 'react';
 
 const PROMPT_EDITOR_SELECT_OPTIONS = PROMPT_EDITOR_OPTIONS.map((option) => ({
   value: option.value,
@@ -41,18 +34,13 @@ interface PromptBoxCardProps {
  * main window's bar is left with the actions.
  */
 export function PromptBoxCard({ settings, onChange }: PromptBoxCardProps) {
-  const handleSelectSize = useCallback(
-    (value: string) => onChange({ panelButtonSize: Number(value) }),
+  const handleChangeSize = useCallback(
+    (key: PromptSizeKey, percent: number) => onChange({ [key]: percent }),
     [onChange],
   );
 
   const handleToggleAutoShrink = useCallback(
     (checked: boolean) => onChange({ autoShrink: checked }),
-    [onChange],
-  );
-
-  const handleSelectAutoShrinkSize = useCallback(
-    (value: string) => onChange({ autoShrinkSize: Number(value) }),
     [onChange],
   );
 
@@ -67,7 +55,7 @@ export function PromptBoxCard({ settings, onChange }: PromptBoxCardProps) {
         <CardTitle>Prompt box</CardTitle>
         <CardDescription>
           How much of the main window the prompt box takes up, as a percentage of its
-          height.
+          height. Drag the bar above the prompt box to set the size it is showing.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -90,12 +78,11 @@ export function PromptBoxCard({ settings, onChange }: PromptBoxCardProps) {
 
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="textbox-size">Text box size</Label>
-          <Select
+          <PercentInput
             id="textbox-size"
-            className="w-32"
-            options={TEXTBOX_SIZE_SELECT_OPTIONS}
-            value={String(settings.panelButtonSize)}
-            onChange={handleSelectSize}
+            sizeKey="panelButtonSize"
+            value={settings.panelButtonSize}
+            onChange={handleChangeSize}
           />
         </div>
 
@@ -115,16 +102,69 @@ export function PromptBoxCard({ settings, onChange }: PromptBoxCardProps) {
 
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="auto-shrink-size">Auto shrink size</Label>
-          <Select
+          <PercentInput
             id="auto-shrink-size"
-            className="w-32"
+            sizeKey="autoShrinkSize"
             disabled={!settings.autoShrink}
-            options={AUTO_SHRINK_SIZE_SELECT_OPTIONS}
-            value={String(settings.autoShrinkSize)}
-            onChange={handleSelectAutoShrinkSize}
+            value={settings.autoShrinkSize}
+            onChange={handleChangeSize}
           />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+interface PercentInputProps {
+  id: string;
+  sizeKey: PromptSizeKey;
+  value: number;
+  disabled?: boolean;
+  onChange: (key: PromptSizeKey, percent: number) => void;
+}
+
+/**
+ * A size the splitter also sets. What is typed is kept as typed while the box
+ * has focus, so a half-typed number is not overwritten; only a number inside
+ * the allowed range is saved, and leaving the box shows the saved size again.
+ */
+function PercentInput({ id, sizeKey, value, disabled, onChange }: PercentInputProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const text = event.target.value;
+      const percent = Number(text);
+      setDraft(text);
+
+      if (
+        text.trim() !== '' &&
+        Number.isFinite(percent) &&
+        percent >= PROMPT_SIZE_MIN &&
+        percent <= PROMPT_SIZE_MAX
+      ) {
+        onChange(sizeKey, clampPromptSize(percent));
+      }
+    },
+    [onChange, sizeKey],
+  );
+
+  const handleBlur = useCallback(() => setDraft(null), []);
+
+  return (
+    <Input
+      id={id}
+      type="number"
+      inputMode="decimal"
+      min={PROMPT_SIZE_MIN}
+      max={PROMPT_SIZE_MAX}
+      step={1}
+      suffix="%"
+      groupClassName="w-32"
+      disabled={disabled}
+      value={draft ?? String(value)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
   );
 }

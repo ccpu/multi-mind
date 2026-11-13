@@ -1,5 +1,6 @@
 import type { PromptPreset } from './prompts';
 import type { WebsiteInfo } from './websites';
+import { clampPromptSize } from './layout';
 import { normalizePromptPresets } from './prompts';
 import { DEFAULT_WEBSITES, normalizeWebsites, resolveWebsite } from './websites';
 
@@ -106,6 +107,13 @@ function asStringArray(value: unknown): string[] | null {
     : null;
 }
 
+/** A prompt box size read from disk, kept to the range the splitter allows. */
+function normalizePromptSize(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? clampPromptSize(value)
+    : fallback;
+}
+
 /** Coerces an unknown value read from disk into a complete settings object. */
 export function normalizeSettings(value: unknown): AppSettings {
   const source = (typeof value === 'object' && value !== null ? value : {}) as Partial<
@@ -113,18 +121,18 @@ export function normalizeSettings(value: unknown): AppSettings {
   >;
 
   return {
-    panelButtonSize:
-      typeof source.panelButtonSize === 'number'
-        ? source.panelButtonSize
-        : DEFAULT_SETTINGS.panelButtonSize,
+    panelButtonSize: normalizePromptSize(
+      source.panelButtonSize,
+      DEFAULT_SETTINGS.panelButtonSize,
+    ),
     autoShrink:
       typeof source.autoShrink === 'boolean'
         ? source.autoShrink
         : DEFAULT_SETTINGS.autoShrink,
-    autoShrinkSize:
-      typeof source.autoShrinkSize === 'number'
-        ? source.autoShrinkSize
-        : DEFAULT_SETTINGS.autoShrinkSize,
+    autoShrinkSize: normalizePromptSize(
+      source.autoShrinkSize,
+      DEFAULT_SETTINGS.autoShrinkSize,
+    ),
     promptEditor: isPromptEditorKind(source.promptEditor)
       ? source.promptEditor
       : DEFAULT_SETTINGS.promptEditor,

@@ -9,8 +9,7 @@ import type { PromptEditorHandle } from '../types/prompt-editor';
 import { overridingPrompts, unusedPrompts } from '@internal/multi-mind';
 import { Button } from '@pixpilot/shadcn-ui';
 import { SendHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useThirdClickHandler } from '../hooks/useThirdClickHandler';
+import { useMemo } from 'react';
 import { MarkdownPromptEditor } from './MarkdownPromptEditor';
 import { PlainPromptEditor } from './PlainPromptEditor';
 import { promptSurface } from './prompt-surface';
@@ -19,6 +18,23 @@ import { PromptPresetsDialog } from './PromptPresetsDialog';
 import { SendToOneButton } from './SendToOneButton';
 
 const PLACEHOLDER = 'Ask every enabled model at once…  (ctrl+enter to send)';
+
+/** Height of one of the stacked buttons (`h-9`), in pixels. */
+const BUTTON_HEIGHT = 36;
+
+/** The `gap-2` between the stacked buttons, in pixels. */
+const BUTTON_GAP = 8;
+
+/** The panel's own `pt-1` and `pb-2` together, in pixels. */
+const PANEL_PADDING = 12;
+
+/**
+ * The least height the panel can be dragged or set to, in pixels: the two
+ * stacked buttons plus the panel's padding. The preset row and a line of the
+ * editor fit beside them.
+ */
+export const PROMPT_PANEL_MIN_HEIGHT =
+  BUTTON_HEIGHT + BUTTON_GAP + BUTTON_HEIGHT + PANEL_PADDING;
 
 interface PromptPanelProps {
   editorRef: RefObject<PromptEditorHandle | null>;
@@ -86,9 +102,6 @@ export function PromptPanel({
   onChangePreset,
   onRemovePreset,
 }: PromptPanelProps) {
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const selectAll = useCallback(() => editorRef.current?.selectAll(), [editorRef]);
-  const handleThirdClick = useThirdClickHandler(selectAll);
   // A used preset is not going out, so it cannot leave the others out either.
   const overriding = useMemo(
     () =>
@@ -100,22 +113,6 @@ export function PromptPanel({
       ),
     [activePrompts, presets, usedPrompts],
   );
-
-  /*
-   * The gesture is counted on the wrapper rather than on the editor: EasyMDE
-   * replaces the textarea with a tree of its own, and only the wrapper is there
-   * whichever editor is in use. It is bound here rather than as a prop because
-   * the wrapper is an observer of the gesture, not a control in its own right.
-   */
-  useEffect(() => {
-    const element = wrapperRef.current;
-    if (element === null) {
-      return undefined;
-    }
-
-    element.addEventListener('mousedown', handleThirdClick);
-    return () => element.removeEventListener('mousedown', handleThirdClick);
-  }, [handleThirdClick]);
 
   const editorProps = {
     value,
@@ -131,8 +128,8 @@ export function PromptPanel({
   return (
     <div
       {...promptSurface}
-      className="flex shrink-0 gap-2 border-t bg-background p-2 pt-1"
-      style={{ height: `${heightPercent}%` }}
+      className="flex shrink-0 gap-2 bg-background p-2 pt-1"
+      style={{ height: `${heightPercent}%`, minHeight: PROMPT_PANEL_MIN_HEIGHT }}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <PromptPresetBar
@@ -148,7 +145,7 @@ export function PromptPanel({
           onRemove={onRemovePreset}
         />
 
-        <div ref={wrapperRef} className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1">
           {editor === 'plain' ? (
             <PlainPromptEditor ref={editorRef} {...editorProps} />
           ) : (

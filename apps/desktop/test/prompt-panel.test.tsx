@@ -141,17 +141,6 @@ describe('promptPanel', () => {
 
       expect(props.onDismiss).toHaveBeenCalledTimes(1);
     });
-
-    it('selects the whole prompt through the handle', () => {
-      const editorRef = editorHandle();
-      renderPanel({ editorRef, value: 'select me' });
-
-      editorRef.current?.selectAll();
-
-      const textarea = screen.getByRole<HTMLTextAreaElement>('textbox');
-      expect(textarea.selectionStart).toBe(0);
-      expect(textarea.selectionEnd).toBe('select me'.length);
-    });
   });
 
   describe('markdown editor', () => {
@@ -175,6 +164,31 @@ describe('promptPanel', () => {
       // and EasyMDE's DOM is not the textarea it replaced.
       expect(editorRef.current?.contains(editor)).toBe(true);
       expect(editorRef.current?.contains(document.body)).toBe(false);
+    });
+
+    it('wakes the panel on a click even while the editor already has focus', async () => {
+      const { container, props } = renderPanel({ editor: 'markdown' });
+      const editor = container.querySelector('.CodeMirror');
+      if (editor === null) {
+        throw new Error('The markdown editor was not built.');
+      }
+
+      await userEvent.click(editor);
+      vi.mocked(props.onActivate).mockClear();
+
+      // Collapsing leaves focus in the editor, so this click raises no focus event.
+      await userEvent.click(editor);
+
+      expect(props.onActivate).toHaveBeenCalled();
+    });
+
+    it('does not wake the panel just because the editor gains focus', () => {
+      const editorRef = editorHandle();
+      const { props } = renderPanel({ editor: 'markdown', editorRef });
+
+      act(() => editorRef.current?.focus());
+
+      expect(props.onActivate).not.toHaveBeenCalled();
     });
 
     it('pushes a prompt set from outside into the editor', () => {

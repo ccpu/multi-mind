@@ -22,7 +22,6 @@ export function PlainPromptEditor({
 
   useImperativeHandle(ref, () => ({
     focus: () => elementRef.current?.focus(),
-    selectAll: () => elementRef.current?.select(),
     contains: (node: Node) => elementRef.current?.contains(node) === true,
   }));
 
