@@ -78,8 +78,8 @@ describe('useSplitLayout', () => {
     expect(screen.getByTestId('active')).toHaveTextContent('true');
     expect(gutterCountOf(container)).toBe(1);
     expect(panesOf(container).map((pane) => pane.style.width)).toStrictEqual([
-      'calc(50% - 3px)',
-      'calc(50% - 3px)',
+      'calc(50% - 2px)',
+      'calc(50% - 2px)',
     ]);
   });
 
@@ -88,7 +88,7 @@ describe('useSplitLayout', () => {
 
     // A drag would leave the panes uneven.
     const [first] = panesOf(screen.getByTestId('split'));
-    first!.style.width = 'calc(90% - 3px)';
+    first!.style.width = 'calc(90% - 2px)';
 
     rerender(<Harness paneKeys={['claude', 'chatgpt', 'grok']} />);
 
@@ -107,8 +107,8 @@ describe('useSplitLayout', () => {
     const container = screen.getByTestId('split');
     expect(gutterCountOf(container)).toBe(1);
     expect(panesOf(container).map((pane) => pane.style.width)).toStrictEqual([
-      'calc(50% - 3px)',
-      'calc(50% - 3px)',
+      'calc(50% - 2px)',
+      'calc(50% - 2px)',
     ]);
   });
 
@@ -117,13 +117,13 @@ describe('useSplitLayout', () => {
     render(<Harness paneKeys={['claude', 'chatgpt']} />);
 
     const [first] = panesOf(screen.getByTestId('split'));
-    first!.style.width = 'calc(90% - 3px)';
+    first!.style.width = 'calc(90% - 2px)';
 
     await user.click(screen.getByRole('button', { name: 'Reset' }));
 
     expect(
       panesOf(screen.getByTestId('split')).map((pane) => pane.style.width),
-    ).toStrictEqual(['calc(50% - 3px)', 'calc(50% - 3px)']);
+    ).toStrictEqual(['calc(50% - 2px)', 'calc(50% - 2px)']);
   });
 
   it('only moves the two panes beside a gutter while the nearer one has room', () => {
@@ -141,11 +141,11 @@ describe('useSplitLayout', () => {
     const container = screen.getByTestId('split');
     widen(container);
 
-    // 300px left: the middle pane can only give up about 167px before it is
+    // 300px left: the middle pane can only give up about 169px before it is
     // down to 160px plus its gutters, so the first pane gives the rest.
     drag(guttersOf(container)[1]!, 600, 300);
 
-    expect(percentsOf(container)).toStrictEqual([20.1, 16.6, 63.3]);
+    expect(percentsOf(container)).toStrictEqual([20.3, 16.4, 63.3]);
   });
 
   it('cascades to the right as well', () => {
@@ -155,6 +155,6 @@ describe('useSplitLayout', () => {
 
     drag(guttersOf(container)[0]!, 300, 600);
 
-    expect(percentsOf(container)).toStrictEqual([63.3, 16.6, 20.1]);
+    expect(percentsOf(container)).toStrictEqual([63.3, 16.4, 20.3]);
   });
 });
